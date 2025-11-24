@@ -168,6 +168,7 @@
                         <select id="camera-type-select" onchange="updateCameraType()">
                             <option value="pmw3901">PMW3901 Optical Flow Sensor (SPI)</option>
                             <option value="caddx_infra256">Caddx Infra 256 (I2C)</option>
+                            <option value="caddx_infra256_ai_box">Caddx Infra 256CA + AI Box</option>
                             <option value="usb_camera">USB Camera</option>
                             <option value="csi_camera">Raspberry Pi Camera (CSI)</option>
                             <option value="analog_usb">Analog Camera via USB</option>
@@ -177,6 +178,30 @@
                         <label>I2C Address (decimal)</label>
                         <input type="number" id="i2c-address" min="1" max="127" value="41">
                         <small>Default: 41 (0x29 hex)</small>
+                    </div>
+                    <div id="ai-box-settings" style="display:none;">
+                        <div class="form-group">
+                            <label>AI Box Port / URL</label>
+                            <input type="text" id="ai-box-port" value="/dev/ttyACM0">
+                            <small>Example: /dev/ttyACM0, COM5, socket://192.168.0.50:6000</small>
+                        </div>
+                        <div class="form-group">
+                            <label>AI Box Baudrate</label>
+                            <input type="number" id="ai-box-baudrate" value="115200" min="9600" step="100">
+                        </div>
+                        <div class="form-group">
+                            <label>Packet Format</label>
+                            <select id="ai-box-packet-format">
+                                <option value="auto">Auto-detect</option>
+                                <option value="json">JSON</option>
+                                <option value="kv">Key/Value (DX:10,DY:-5)</option>
+                                <option value="csv">CSV (10,-5,90)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Read Timeout (seconds)</label>
+                            <input type="number" id="ai-box-timeout" value="0.05" min="0.01" step="0.01">
+                        </div>
                     </div>
                     <div class="form-group">
                         <label>Rotation (degrees)</label>

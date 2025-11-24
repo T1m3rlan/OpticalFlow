@@ -47,6 +47,11 @@ SCL             -> Pin 5 (GPIO 3 / I2C SCL)
 - Avoid mounting near bright LEDs or heat sources
 - Keep lens clean and unobstructed
 
+### AI Box Harness (256CA Kit)
+- Connect the Caddx Infra 256CA ribbon to the AI Box per manufacturer guide
+- Use the supplied USB-C cable from AI Box to Raspberry Pi (provides data + power)
+- Pi sees the AI Box as `/dev/ttyACM0` (or `COM#` on Windows). No direct I2C wiring required.
+
 ## Software Installation
 
 ### 1. Enable I2C Interface
@@ -87,6 +92,20 @@ sudo i2cdetect -y 1
 # 30: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
 ```
 
+### 3b. AI Box Serial Check (256CA)
+
+```bash
+# List USB serial devices (AI Box appears as /dev/ttyACM*)
+ls /dev/ttyACM*
+
+# View raw stream (Ctrl+C to exit)
+sudo screen /dev/ttyACM0 115200
+
+# Example output:
+# DX:12 DY:-5 SQUAL:88 HEIGHT:0.72
+# {"dx":13,"dy":-4,"squal":94,"height":0.70}
+```
+
 ### 4. Test Sensor
 
 ```bash
@@ -120,6 +139,31 @@ Edit `config.json`:
 }
 ```
 
+### AI Box Configuration (256CA)
+
+```json
+{
+  "sensor": {
+    "type": "caddx_infra256_ai_box",
+    "rotation": 0,
+    "ai_box": {
+      "port": "/dev/ttyACM0",
+      "baudrate": 115200,
+      "packet_format": "auto",
+      "timeout": 0.05
+    }
+  },
+  "tracker": {
+    "scale_factor": 0.001,
+    "initial_height": 0.7
+  }
+}
+```
+
+- `port` also accepts `socket://HOST:PORT` for remote AI Box streaming
+- `packet_format` options: `auto`, `json`, `kv`, `csv`
+- AI Box height telemetry automatically updates Betafly's tracker height
+
 ### Configuration Parameters
 
 #### `i2c_bus`
@@ -137,6 +181,24 @@ Edit `config.json`:
 - `90`: Sensor rotated 90° clockwise
 - `180`: Sensor rotated 180°
 - `270`: Sensor rotated 270° clockwise
+
+#### `ai_box.port`
+- Default: `/dev/ttyACM0`
+- Accepts serial ports (`/dev/ttyUSB0`, `COM5`) or pyserial URLs (`socket://host:port`)
+
+#### `ai_box.baudrate`
+- Default: `115200`
+- Match the AI Box firmware setting (115200 for the stock kit)
+
+#### `ai_box.packet_format`
+- `auto`: Try JSON → key/value → CSV (default)
+- `json`: Force strict JSON parsing (`{"dx":10,"dy":-4}`)
+- `kv`: `DX:10,DY:-4,SQUAL:90`
+- `csv`: `10,-4,90,0.65`
+
+#### `ai_box.timeout`
+- Read timeout in seconds (default `0.05`)
+- Increase if using slow network links
 
 ### Scale Factor Tuning
 
@@ -300,6 +362,26 @@ For battery-powered applications:
 
 ```python
 sensor.set_power_mode(low_power=True)  # Reduce power consumption
+```
+
+### AI Box Packet Formats & Diagnostics
+
+When using the 256CA + AI Box kit, the bridge streams motion data over serial:
+
+- **JSON**: `{"dx":12,"dy":-5,"squal":83,"height":0.68}`
+- **Key/Value**: `DX:12,DY:-5,SQUAL:83,HEIGHT:0.68`
+- **CSV**: `12,-5,83,0.68`
+
+Set `packet_format` accordingly or leave it on `auto`.
+
+Diagnostics:
+
+```python
+from caddx_infra256 import CaddxInfra256AIBox
+
+sensor = CaddxInfra256AIBox(port='/dev/ttyACM0')
+print(sensor.get_diagnostics())
+# -> {'transport': '/dev/ttyACM0', 'baudrate': 115200, 'last_quality': 96, 'last_height': 0.71, ...}
 ```
 
 ## Best Practices

@@ -61,9 +61,22 @@ async function loadConfig() {
 function updateConfigUI() {
     // Sensor tab
     if (config.sensor) {
+        document.getElementById('camera-type-select').value = config.sensor.type || 'pmw3901';
         document.getElementById('sensor-rotation').value = config.sensor.rotation || 0;
-        document.getElementById('scale-factor').value = config.tracker?.scale_factor || 0.001;
+        document.getElementById('i2c-address').value = config.sensor.i2c_address || 41;
+
+        const aiBox = config.sensor.ai_box || {};
+        document.getElementById('ai-box-port').value = aiBox.port || '/dev/ttyACM0';
+        document.getElementById('ai-box-baudrate').value = aiBox.baudrate || 115200;
+        document.getElementById('ai-box-packet-format').value = aiBox.packet_format || 'auto';
+        document.getElementById('ai-box-timeout').value = (aiBox.timeout !== undefined ? aiBox.timeout : 0.05);
     }
+    document.getElementById('scale-factor').value = config.tracker?.scale_factor || 0.001;
+    const heightValue = (config.tracker && typeof config.tracker.initial_height === 'number')
+        ? config.tracker.initial_height
+        : 0.5;
+    document.getElementById('height-slider').value = heightValue;
+    document.getElementById('height-input').value = heightValue;
     
     // PID tab
     if (config.pid) {
@@ -91,18 +104,32 @@ function updateConfigUI() {
         document.getElementById('camera-height').value = config.camera.height || 480;
         document.getElementById('camera-fps').value = config.camera.fps || 30;
     }
+
+    updateCameraType();
 }
 
 // Save configuration
 async function saveConfig() {
     // Build config object from UI
+    const selectedSensorType = document.getElementById('camera-type-select').value;
+    const existingSensor = config.sensor || {};
+    const sensorConfig = {
+        type: selectedSensorType,
+        spi_bus: typeof existingSensor.spi_bus === 'number' ? existingSensor.spi_bus : 0,
+        spi_device: typeof existingSensor.spi_device === 'number' ? existingSensor.spi_device : 0,
+        i2c_bus: typeof existingSensor.i2c_bus === 'number' ? existingSensor.i2c_bus : 1,
+        i2c_address: parseInt(document.getElementById('i2c-address').value) || 41,
+        rotation: parseInt(document.getElementById('sensor-rotation').value),
+        ai_box: {
+            port: document.getElementById('ai-box-port').value || '/dev/ttyACM0',
+            baudrate: parseInt(document.getElementById('ai-box-baudrate').value) || 115200,
+            packet_format: document.getElementById('ai-box-packet-format').value || 'auto',
+            timeout: parseFloat(document.getElementById('ai-box-timeout').value) || 0.05
+        }
+    };
+
     const newConfig = {
-        sensor: {
-            spi_bus: config.sensor?.spi_bus || 0,
-            spi_device: config.sensor?.spi_device || 0,
-            rotation: parseInt(document.getElementById('sensor-rotation').value),
-            type: document.getElementById('camera-type-select').value
-        },
+        sensor: sensorConfig,
         tracker: {
             scale_factor: parseFloat(document.getElementById('scale-factor').value),
             initial_height: parseFloat(document.getElementById('height-input').value)
@@ -321,10 +348,18 @@ function updateCameraType() {
     } else {
         i2cGroup.style.display = 'none';
     }
+
+    // AI Box settings visibility
+    const aiBoxSettings = document.getElementById('ai-box-settings');
+    if (cameraType === 'caddx_infra256_ai_box' || cameraType === 'caddx_infra256ca') {
+        aiBoxSettings.style.display = 'block';
+    } else {
+        aiBoxSettings.style.display = 'none';
+    }
     
     // Show/hide camera settings based on type
     const cameraTab = document.getElementById('camera-tab');
-    if (cameraType === 'pmw3901' || cameraType === 'caddx_infra256') {
+    if (cameraType === 'pmw3901' || cameraType === 'caddx_infra256' || cameraType === 'caddx_infra256_ai_box' || cameraType === 'caddx_infra256ca') {
         cameraTab.style.display = 'none';
     } else {
         cameraTab.style.display = 'block';

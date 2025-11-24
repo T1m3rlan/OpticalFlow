@@ -19,19 +19,21 @@ from position_stabilizer import StabilizationController, PIDGains
 from stick_input import StickInput, StickMixer, ModeSwitch
 from web_interface import app, system_state, state_lock, start_web_server
 
-# Try to import Caddx Infra 256
-try:
-    from caddx_infra256 import CaddxInfra256
-    CADDX_AVAILABLE = True
-except ImportError:
-    CADDX_AVAILABLE = False
-    logger.warning("Caddx Infra 256 support not available")
-
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+# Try to import Caddx Infra 256 family
+try:
+    from caddx_infra256 import CaddxInfra256, CaddxInfra256AIBox
+    CADDX_AVAILABLE = True
+except ImportError:
+    CADDX_AVAILABLE = False
+    CaddxInfra256 = None
+    CaddxInfra256AIBox = None
+    logger.warning("Caddx Infra 256 support not available")
 
 
 class BetaflyStabilizerAdvanced:
@@ -69,6 +71,18 @@ class BetaflyStabilizerAdvanced:
                 bus_number=self.config['sensor'].get('i2c_bus', 1),
                 address=self.config['sensor'].get('i2c_address', 0x29),
                 rotation=self.config['sensor']['rotation']
+            )
+        elif camera_type in ['caddx_infra256_ai_box', 'caddx_infra256ca']:
+            if not CADDX_AVAILABLE or CaddxInfra256AIBox is None:
+                raise RuntimeError("Caddx Infra 256 AI Box support not available. Install pyserial: pip install pyserial")
+
+            ai_box_cfg = self.config['sensor'].get('ai_box', {})
+            self.sensor = CaddxInfra256AIBox(
+                port=ai_box_cfg.get('port', CaddxInfra256AIBox.DEFAULT_PORT),
+                baudrate=ai_box_cfg.get('baudrate', CaddxInfra256AIBox.DEFAULT_BAUDRATE),
+                rotation=self.config['sensor']['rotation'],
+                timeout=ai_box_cfg.get('timeout', 0.05),
+                packet_format=ai_box_cfg.get('packet_format', 'auto')
             )
         elif camera_type in ['usb_camera', 'csi_camera', 'opencv_any']:
             camera_id = self.config.get('camera', {}).get('device', 0)
@@ -176,7 +190,15 @@ class BetaflyStabilizerAdvanced:
                 'type': 'pmw3901',
                 'spi_bus': 0,
                 'spi_device': 0,
-                'rotation': 0
+                'rotation': 0,
+                'i2c_bus': 1,
+                'i2c_address': 0x29,
+                'ai_box': {
+                    'port': '/dev/ttyACM0',
+                    'baudrate': 115200,
+                    'timeout': 0.05,
+                    'packet_format': 'auto'
+                }
             },
             'tracker': {
                 'scale_factor': 0.001,
@@ -298,6 +320,12 @@ class BetaflyStabilizerAdvanced:
         
         while self.running:
             loop_start = time.time()
+            
+            # Allow sensors with onboard height sensing (e.g., AI Box) to update tracker scale
+            if hasattr(self.sensor, 'get_height'):
+                new_height = self.sensor.get_height()
+                if new_height is not None and new_height > 0:
+                    self.tracker.set_height(new_height)
             
             # Update position tracking
             pos_x, pos_y = self.tracker.update()

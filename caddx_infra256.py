@@ -3,9 +3,11 @@ Caddx Infra 256 Optical Flow Sensor Driver
 I2C-based infrared optical flow sensor for drone position tracking
 """
 
+import json
+import re
 import time
 import logging
-from typing import Tuple, Optional
+from typing import Tuple, Optional, Dict, Any
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -21,6 +23,14 @@ except ImportError:
     except ImportError:
         I2C_AVAILABLE = False
         logger.warning("smbus/smbus2 not available - Caddx Infra 256 disabled")
+
+# Try to import serial for AI Box bridge
+try:
+    import serial
+    SERIAL_AVAILABLE = True
+except ImportError:
+    SERIAL_AVAILABLE = False
+    logger.warning("pyserial not available - Caddx Infra 256 AI Box disabled")
 
 
 class CaddxInfra256:
@@ -295,6 +305,244 @@ class CaddxInfra256:
         except Exception as e:
             logger.error(f"Failed to get diagnostics: {e}")
             return {}
+
+
+class CaddxInfra256AIBox:
+    """
+    Driver for the Caddx Infra 256CA when used with the AI Box bridge.
+    The AI Box streams delta measurements over a serial (or socket) link.
+    """
+
+    DEFAULT_PORT = '/dev/ttyACM0'
+    DEFAULT_BAUDRATE = 115200
+
+    def __init__(self,
+                 port: str = DEFAULT_PORT,
+                 baudrate: int = DEFAULT_BAUDRATE,
+                 rotation: int = 0,
+                 timeout: float = 0.05,
+                 packet_format: str = 'auto'):
+        if not SERIAL_AVAILABLE:
+            raise RuntimeError("pyserial is required for Caddx Infra 256 AI Box support")
+
+        self.port = port
+        self.baudrate = baudrate
+        self.rotation = rotation
+        self.timeout = timeout
+        self.packet_format = packet_format
+
+        try:
+            # serial_for_url allows socket:// and rfc2217:// transport in addition to real UARTs
+            self.serial = serial.serial_for_url(
+                port,
+                baudrate=baudrate,
+                timeout=timeout
+            )
+            self.serial.reset_input_buffer()
+            logger.info(f"Caddx AI Box connected on {port} @ {baudrate} baud")
+        except Exception as exc:
+            raise RuntimeError(f"Failed to open AI Box port {port}: {exc}") from exc
+
+        self.last_quality = 0
+        self.last_height: Optional[float] = None
+        self._last_packet_time = 0.0
+
+    def get_motion(self) -> Tuple[int, int]:
+        """Read motion deltas from the AI Box stream"""
+        packet = self._read_packet()
+        if not packet:
+            return (0, 0)
+
+        dx = int(round(packet['dx']))
+        dy = int(round(packet['dy']))
+
+        if 'squal' in packet:
+            self.last_quality = int(packet['squal'])
+        if 'height' in packet:
+            try:
+                self.last_height = float(packet['height'])
+            except (TypeError, ValueError):
+                pass
+
+        dx, dy = self._apply_rotation(dx, dy)
+        self._last_packet_time = time.time()
+        return (dx, dy)
+
+    def get_surface_quality(self) -> int:
+        """Return last reported surface quality"""
+        return self.last_quality
+
+    def get_height(self) -> Optional[float]:
+        """Return last height reading supplied by AI Box (if any)"""
+        return self.last_height
+
+    def shutdown(self):
+        """Close AI Box connection"""
+        try:
+            if hasattr(self, 'serial'):
+                self.serial.close()
+                logger.info("Caddx AI Box connection closed")
+        except Exception as exc:
+            logger.error(f"Failed to close AI Box connection: {exc}")
+
+    def get_diagnostics(self) -> dict:
+        """Return diagnostic information about the AI Box stream"""
+        return {
+            'transport': self.port,
+            'baudrate': self.baudrate,
+            'last_quality': self.last_quality,
+            'last_height': self.last_height,
+            'last_packet_time': self._last_packet_time
+        }
+
+    def _read_packet(self) -> Optional[Dict[str, Any]]:
+        """Read and parse a single packet from the AI Box"""
+        deadline = time.time() + max(self.timeout, 0.01)
+
+        while time.time() < deadline:
+            try:
+                raw_line = self.serial.readline()
+            except Exception as exc:
+                logger.error(f"AI Box read error: {exc}")
+                return None
+
+            if not raw_line:
+                continue
+
+            try:
+                line = raw_line.decode('utf-8', errors='ignore').strip()
+            except Exception:
+                continue
+
+            if not line:
+                continue
+
+            packet = self._parse_packet_line(line, self.packet_format)
+            if packet:
+                return packet
+
+        return None
+
+    @classmethod
+    def _parse_packet_line(cls, line: str, packet_format: str = 'auto') -> Optional[Dict[str, Any]]:
+        """Parse a single AI Box line supporting JSON, key/value, or CSV formats"""
+        if not line:
+            return None
+
+        candidates = [packet_format] if packet_format != 'auto' else ['json', 'kv', 'csv']
+
+        for mode in candidates:
+            if mode == 'json':
+                try:
+                    data = json.loads(line)
+                    if isinstance(data, dict):
+                        normalized = cls._normalize_packet(data)
+                        if normalized:
+                            return normalized
+                except json.JSONDecodeError:
+                    if packet_format != 'auto':
+                        return None
+            elif mode == 'kv':
+                entries = re.split(r'[,\t]+', line)
+                payload: Dict[str, Any] = {}
+                for entry in entries:
+                    if not entry.strip():
+                        continue
+                    if ':' in entry:
+                        key, value = entry.split(':', 1)
+                    elif '=' in entry:
+                        key, value = entry.split('=', 1)
+                    else:
+                        continue
+                    payload[key.strip().lower()] = value.strip()
+
+                normalized = cls._normalize_packet(payload)
+                if normalized:
+                    return normalized
+            elif mode == 'csv':
+                numbers = []
+                for fragment in re.split(r'[,\s]+', line):
+                    if not fragment:
+                        continue
+                    try:
+                        numbers.append(float(fragment))
+                    except ValueError:
+                        continue
+
+                if len(numbers) >= 2:
+                    payload = {
+                        'dx': numbers[0],
+                        'dy': numbers[1]
+                    }
+                    if len(numbers) >= 3:
+                        payload['squal'] = numbers[2]
+                    if len(numbers) >= 4:
+                        payload['height'] = numbers[3]
+
+                    normalized = cls._normalize_packet(payload)
+                    if normalized:
+                        return normalized
+
+        return None
+
+    @staticmethod
+    def _normalize_packet(payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Normalize packet keys/values to expected fields"""
+        if not payload:
+            return None
+
+        def first_key(keys):
+            for key in keys:
+                if key in payload:
+                    return payload[key]
+            return None
+
+        dx = CaddxInfra256AIBox._coerce_number(first_key(['dx', 'delta_x', 'x', 'vx']))
+        dy = CaddxInfra256AIBox._coerce_number(first_key(['dy', 'delta_y', 'y', 'vy']))
+
+        if dx is None or dy is None:
+            return None
+
+        result: Dict[str, Any] = {
+            'dx': dx,
+            'dy': dy
+        }
+
+        squal = CaddxInfra256AIBox._coerce_number(first_key(['squal', 'quality', 'surface_quality', 'sq']))
+        if squal is not None:
+            result['squal'] = int(squal)
+
+        height = CaddxInfra256AIBox._coerce_number(first_key(['height', 'alt', 'altitude', 'h']))
+        if height is not None:
+            result['height'] = float(height)
+
+        return result
+
+    @staticmethod
+    def _coerce_number(value: Any) -> Optional[float]:
+        """Convert value to float if possible"""
+        if value is None:
+            return None
+        if isinstance(value, (int, float)):
+            return float(value)
+        if isinstance(value, str):
+            try:
+                return float(value.strip())
+            except ValueError:
+                return None
+        return None
+
+    def _apply_rotation(self, x: int, y: int) -> Tuple[int, int]:
+        """Reuse rotation logic for AI Box data"""
+        if self.rotation == 0:
+            return (x, y)
+        elif self.rotation == 90:
+            return (y, -x)
+        elif self.rotation == 180:
+            return (-x, -y)
+        elif self.rotation == 270:
+            return (-y, x)
+        return (x, y)
 
 
 def detect_caddx_infra256(bus_number: int = 1) -> Optional[int]:

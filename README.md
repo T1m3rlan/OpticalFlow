@@ -27,6 +27,7 @@ A complete optical flow-based position stabilization system for the Betafly dron
 - **Optical Flow Sensor** (choose one):
   - PMW3901 Optical Flow Sensor (SPI) - Pimoroni or similar
   - **Caddx Infra 256 (I2C)** - Recommended for production ⭐
+  - **Caddx Infra 256CA + AI Box (Serial/Socket)** - Turnkey kit with onboard MCU & height sensing
   - USB/CSI/Analog Camera (for computer vision approach)
 - **Flight Controller** (Betaflight, iNav, or ArduPilot compatible)
 - **Power Supply** (5V for Pi, shared with drone battery via BEC)
@@ -62,6 +63,16 @@ SCL             -> Pin 5 (GPIO 3 / I2C SCL)
 - ✅ I2C interface (easier debugging)
 
 **Important**: Ensure the sensor is mounted facing downward with adequate lighting for optical tracking.
+
+#### Option 3: Caddx Infra 256CA + AI Box (Serial/Socket)
+```
+Caddx Infra 256CA -> AI Box Harness
+AI Box USB-C      -> Pi USB (appears as /dev/ttyACM0)
+```
+
+- AI Box powers the sensor and MCU, Pi only needs USB data/power
+- Optional network streaming by flashing AI Box into socket bridge mode
+- Set `sensor.type` to `caddx_infra256_ai_box` or `caddx_infra256ca`
 
 ## Software Installation
 
@@ -186,6 +197,10 @@ The web interface provides:
 
 # Analog camera via USB capture card
 # Edit config.json: "sensor": {"type": "analog_usb"}
+./betafly_stabilizer_advanced.py --config config.json
+
+# Caddx Infra 256CA + AI Box
+# Edit config.json: "sensor": {"type": "caddx_infra256_ai_box"}
 ./betafly_stabilizer_advanced.py --config config.json
 ```
 

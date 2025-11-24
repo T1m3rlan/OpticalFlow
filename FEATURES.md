@@ -207,6 +207,31 @@ sudo raspi-config
 }
 ```
 
+#### Caddx Infra 256CA + AI Box (Serial/Socket)
+```json
+{
+  "sensor": {
+    "type": "caddx_infra256_ai_box",
+    "rotation": 0,
+    "ai_box": {
+      "port": "/dev/ttyACM0",
+      "baudrate": 115200,
+      "packet_format": "auto",
+      "timeout": 0.05
+    }
+  },
+  "tracker": {
+    "scale_factor": 0.001,
+    "initial_height": 0.7
+  }
+}
+```
+
+**Tips:**
+- `port` accepts serial ports or pyserial URLs (`socket://host:port`)
+- Leave `packet_format` on `"auto"` to support JSON, key/value, or CSV streams
+- AI Box height telemetry automatically feeds the tracker if included in the packet
+
 ### Optical Flow Methods
 
 Two methods available:
