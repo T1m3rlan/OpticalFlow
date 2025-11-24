@@ -32,6 +32,10 @@ system_state = {
     'last_update': time.time()
 }
 
+# Command queue for communication from Web UI to Stabilizer
+system_commands = []
+command_lock = threading.Lock()
+
 config_lock = threading.Lock()
 state_lock = threading.Lock()
 
@@ -100,29 +104,29 @@ def send_command():
         if cmd == 'set_mode':
             mode = params.get('mode')
             if mode in ['off', 'velocity_damping', 'position_hold']:
-                with state_lock:
-                    system_state['mode'] = mode
+                with command_lock:
+                    system_commands.append(('set_mode', mode))
                 return jsonify({'success': True, 'message': f'Mode set to {mode}'})
             else:
                 return jsonify({'success': False, 'error': 'Invalid mode'}), 400
         
         elif cmd == 'reset_position':
-            with state_lock:
-                system_state['position'] = {'x': 0.0, 'y': 0.0}
+            with command_lock:
+                system_commands.append(('reset_position', None))
             return jsonify({'success': True, 'message': 'Position reset'})
         
         elif cmd == 'set_height':
             height = float(params.get('height', 0.5))
             if 0.1 <= height <= 5.0:
-                with state_lock:
-                    system_state['height'] = height
+                with command_lock:
+                    system_commands.append(('set_height', height))
                 return jsonify({'success': True, 'message': f'Height set to {height}m'})
             else:
                 return jsonify({'success': False, 'error': 'Height out of range'}), 400
         
         elif cmd == 'hold_position':
-            with state_lock:
-                system_state['mode'] = 'position_hold'
+            with command_lock:
+                system_commands.append(('hold_position', None))
             return jsonify({'success': True, 'message': 'Position hold activated'})
         
         else:

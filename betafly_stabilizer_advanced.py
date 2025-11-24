@@ -13,19 +13,14 @@ from typing import Optional
 import json
 from threading import Thread
 
-from optical_flow_sensor import PMW3901, OpticalFlowTracker
-from camera_optical_flow import CameraOpticalFlow, AnalogCameraFlow, auto_detect_camera
+from optical_flow_sensor import OpticalFlowTracker
+from sensor_factory import create_sensor
 from position_stabilizer import StabilizationController, PIDGains
 from stick_input import StickInput, StickMixer, ModeSwitch
-from web_interface import app, system_state, state_lock, start_web_server
-
-# Try to import Caddx Infra 256
-try:
-    from caddx_infra256 import CaddxInfra256
-    CADDX_AVAILABLE = True
-except ImportError:
-    CADDX_AVAILABLE = False
-    logger.warning("Caddx Infra 256 support not available")
+from web_interface import (
+    app, system_state, state_lock, start_web_server,
+    system_commands, command_lock
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -52,49 +47,8 @@ class BetaflyStabilizerAdvanced:
         self.config = self._load_config(config_file)
         
         # Initialize sensor based on type
+        self.sensor = create_sensor(self.config)
         camera_type = self.config.get('sensor', {}).get('type', 'pmw3901')
-        logger.info(f"Initializing sensor: {camera_type}")
-        
-        if camera_type == 'pmw3901':
-            self.sensor = PMW3901(
-                spi_bus=self.config['sensor']['spi_bus'],
-                spi_device=self.config['sensor']['spi_device'],
-                rotation=self.config['sensor']['rotation']
-            )
-        elif camera_type == 'caddx_infra256':
-            if not CADDX_AVAILABLE:
-                raise RuntimeError("Caddx Infra 256 support not available. Install smbus2: pip install smbus2")
-            
-            self.sensor = CaddxInfra256(
-                bus_number=self.config['sensor'].get('i2c_bus', 1),
-                address=self.config['sensor'].get('i2c_address', 0x29),
-                rotation=self.config['sensor']['rotation']
-            )
-        elif camera_type in ['usb_camera', 'csi_camera', 'opencv_any']:
-            camera_id = self.config.get('camera', {}).get('device', 0)
-            if camera_id == 'auto':
-                camera_id = auto_detect_camera()
-                if camera_id is None:
-                    raise RuntimeError("No camera detected")
-            
-            self.sensor = CameraOpticalFlow(
-                camera_id=camera_id,
-                width=self.config.get('camera', {}).get('width', 640),
-                height=self.config.get('camera', {}).get('height', 480),
-                fps=self.config.get('camera', {}).get('fps', 30),
-                method=self.config.get('camera', {}).get('method', 'farneback')
-            )
-            self.sensor.start()
-        elif camera_type == 'analog_usb':
-            self.sensor = AnalogCameraFlow(
-                device_path=self.config.get('camera', {}).get('device', '/dev/video0'),
-                width=self.config.get('camera', {}).get('width', 720),
-                height=self.config.get('camera', {}).get('height', 480),
-                deinterlace=self.config.get('camera', {}).get('deinterlace', True)
-            )
-            self.sensor.start()
-        else:
-            raise ValueError(f"Unknown camera type: {camera_type}")
         
         # Initialize optical flow tracker
         self.tracker = OpticalFlowTracker(
@@ -253,6 +207,18 @@ class BetaflyStabilizerAdvanced:
         self.web_thread.start()
         logger.info(f"Web interface started at http://{host}:{port}")
     
+    def set_mode(self, mode: str):
+        """Change stabilization mode"""
+        self.stabilizer.set_mode(mode)
+    
+    def hold_position(self):
+        """Enable position hold at current location"""
+        # We need current position, so we do a quick update or use last known
+        # Since this is called from control loop, we can use the tracker's state
+        # But tracker state is updated in the loop AFTER this command processing
+        # So we use tracker's current internal state
+        self.stabilizer.hold_current_position(self.tracker.pos_x, self.tracker.pos_y)
+    
     def start(self):
         """Start the stabilization system"""
         logger.info("Starting Betafly advanced stabilization system")
@@ -299,6 +265,24 @@ class BetaflyStabilizerAdvanced:
         while self.running:
             loop_start = time.time()
             
+            # Process web commands
+            with command_lock:
+                while system_commands:
+                    try:
+                        cmd, arg = system_commands.pop(0)
+                        if cmd == 'set_mode':
+                            self.stabilizer.set_mode(arg)
+                        elif cmd == 'reset_position':
+                            self.tracker.reset_position()
+                            self.stabilizer.position_stabilizer.reset()
+                        elif cmd == 'set_height':
+                            self.tracker.set_height(arg)
+                        elif cmd == 'hold_position':
+                            self.hold_position()
+                        logger.info(f"Executed command: {cmd}")
+                    except Exception as e:
+                        logger.error(f"Error executing command {cmd}: {e}")
+
             # Update position tracking
             pos_x, pos_y = self.tracker.update()
             vel_x, vel_y = self.tracker.get_velocity()

@@ -354,9 +354,26 @@ class AnalogCameraFlow:
         """
         # Simple line averaging deinterlace
         deinterlaced = frame.copy()
-        deinterlaced[1::2] = (frame[0:-1:2].astype(np.float32) + 
-                              frame[2::2].astype(np.float32)) / 2
-        return deinterlaced.astype(np.uint8)
+        h, w = frame.shape[:2]
+        
+        # Ensure even height for simplicity, process rows 1, 3, ... up to h-2
+        # We average row i-1 and i+1 to get row i
+        
+        # Target rows: 1, 3, 5, ...
+        # Upper neighbors: 0, 2, 4, ...
+        # Lower neighbors: 2, 4, 6, ...
+        
+        # Use integer math for speed if uint8
+        upper = frame[0:-2:2].astype(np.uint16)
+        lower = frame[2::2].astype(np.uint16)
+        
+        # Limit to matching length
+        min_len = min(upper.shape[0], lower.shape[0])
+        
+        if min_len > 0:
+             deinterlaced[1:2*min_len:2] = ((upper[:min_len] + lower[:min_len]) // 2).astype(np.uint8)
+             
+        return deinterlaced
     
     def get_surface_quality(self) -> int:
         """Get surface quality"""

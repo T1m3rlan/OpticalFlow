@@ -15,7 +15,8 @@ import logging
 from typing import Optional
 import json
 
-from optical_flow_sensor import PMW3901, OpticalFlowTracker
+from optical_flow_sensor import OpticalFlowTracker
+from sensor_factory import create_sensor
 from position_stabilizer import (
     StabilizationController, 
     PIDGains
@@ -46,11 +47,7 @@ class BetaflyStabilizer:
         
         # Initialize optical flow sensor
         logger.info("Initializing optical flow sensor...")
-        self.sensor = PMW3901(
-            spi_bus=self.config['sensor']['spi_bus'],
-            spi_device=self.config['sensor']['spi_device'],
-            rotation=self.config['sensor']['rotation']
-        )
+        self.sensor = create_sensor(self.config)
         
         # Initialize optical flow tracker
         self.tracker = OpticalFlowTracker(

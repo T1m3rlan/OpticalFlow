@@ -7,6 +7,7 @@ import time
 import spidev
 from typing import Tuple, Optional
 import logging
+from collections import deque
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -187,9 +188,9 @@ class OpticalFlowTracker:
         self.last_update_time = time.time()
         
         # Moving average filter for noise reduction
-        self.velocity_history_x = []
-        self.velocity_history_y = []
         self.filter_window = 5
+        self.velocity_history_x = deque(maxlen=self.filter_window)
+        self.velocity_history_y = deque(maxlen=self.filter_window)
     
     def update(self) -> Tuple[float, float]:
         """
@@ -216,10 +217,6 @@ class OpticalFlowTracker:
         # Apply moving average filter
         self.velocity_history_x.append(self.vel_x)
         self.velocity_history_y.append(self.vel_y)
-        
-        if len(self.velocity_history_x) > self.filter_window:
-            self.velocity_history_x.pop(0)
-            self.velocity_history_y.pop(0)
         
         filtered_vel_x = sum(self.velocity_history_x) / len(self.velocity_history_x)
         filtered_vel_y = sum(self.velocity_history_y) / len(self.velocity_history_y)
