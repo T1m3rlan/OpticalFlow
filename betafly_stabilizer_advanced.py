@@ -19,6 +19,14 @@ from position_stabilizer import StabilizationController, PIDGains
 from stick_input import StickInput, StickMixer, ModeSwitch
 from web_interface import app, system_state, state_lock, start_web_server
 
+# Try to import Caddx Infra 256
+try:
+    from caddx_infra256 import CaddxInfra256
+    CADDX_AVAILABLE = True
+except ImportError:
+    CADDX_AVAILABLE = False
+    logger.warning("Caddx Infra 256 support not available")
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -51,6 +59,15 @@ class BetaflyStabilizerAdvanced:
             self.sensor = PMW3901(
                 spi_bus=self.config['sensor']['spi_bus'],
                 spi_device=self.config['sensor']['spi_device'],
+                rotation=self.config['sensor']['rotation']
+            )
+        elif camera_type == 'caddx_infra256':
+            if not CADDX_AVAILABLE:
+                raise RuntimeError("Caddx Infra 256 support not available. Install smbus2: pip install smbus2")
+            
+            self.sensor = CaddxInfra256(
+                bus_number=self.config['sensor'].get('i2c_bus', 1),
+                address=self.config['sensor'].get('i2c_address', 0x29),
                 rotation=self.config['sensor']['rotation']
             )
         elif camera_type in ['usb_camera', 'csi_camera', 'opencv_any']:

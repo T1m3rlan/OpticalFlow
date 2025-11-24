@@ -59,12 +59,13 @@ Advanced position stabilization with **web interface**, **multiple camera suppor
 - `static/css/style.css` - Styling
 - `static/js/app.js` - Frontend code
 
-## Supported Cameras
+## Supported Sensors
 
-1. **PMW3901** - Dedicated optical flow sensor (original, fastest)
-2. **USB Camera** - Any USB webcam
-3. **CSI Camera** - Raspberry Pi Camera Module
-4. **Analog Camera** - FPV camera via USB capture card
+1. **PMW3901** - Dedicated optical flow sensor (SPI, original)
+2. **Caddx Infra 256** ⭐ - Infrared optical flow (I2C, recommended)
+3. **USB Camera** - Any USB webcam
+4. **CSI Camera** - Raspberry Pi Camera Module
+5. **Analog Camera** - FPV camera via USB capture card
 
 Configure in `config.json`:
 ```json

@@ -314,9 +314,17 @@ function updateCameraType() {
     const cameraType = document.getElementById('camera-type-select').value;
     console.log('Camera type changed to:', cameraType);
     
+    // Show/hide I2C address field for Caddx
+    const i2cGroup = document.getElementById('i2c-address-group');
+    if (cameraType === 'caddx_infra256') {
+        i2cGroup.style.display = 'block';
+    } else {
+        i2cGroup.style.display = 'none';
+    }
+    
     // Show/hide camera settings based on type
     const cameraTab = document.getElementById('camera-tab');
-    if (cameraType === 'pmw3901') {
+    if (cameraType === 'pmw3901' || cameraType === 'caddx_infra256') {
         cameraTab.style.display = 'none';
     } else {
         cameraTab.style.display = 'block';

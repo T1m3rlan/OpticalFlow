@@ -24,12 +24,16 @@ A complete optical flow-based position stabilization system for the Betafly dron
 
 ### Required Components
 - **Raspberry Pi Zero W** (or Zero 2 W for better performance)
-- **PMW3901 Optical Flow Sensor** (Pimoroni or similar)
+- **Optical Flow Sensor** (choose one):
+  - PMW3901 Optical Flow Sensor (SPI) - Pimoroni or similar
+  - **Caddx Infra 256 (I2C)** - Recommended for production ⭐
+  - USB/CSI/Analog Camera (for computer vision approach)
 - **Flight Controller** (Betaflight, iNav, or ArduPilot compatible)
 - **Power Supply** (5V for Pi, shared with drone battery via BEC)
 
-### Wiring Diagram
+### Wiring Diagrams
 
+#### Option 1: PMW3901 (SPI)
 ```
 PMW3901 Sensor -> Raspberry Pi Zero
 -----------------------------------------
@@ -40,6 +44,22 @@ MISO           -> Pin 21 (GPIO 9 / MISO)
 SCLK           -> Pin 23 (GPIO 11 / SCLK)
 CS             -> Pin 24 (GPIO 8 / CE0)
 ```
+
+#### Option 2: Caddx Infra 256 (I2C) ⭐ Recommended
+```
+Caddx Infra 256 -> Raspberry Pi Zero
+-----------------------------------------
+VCC (3.3V)      -> Pin 1 (3.3V)
+GND             -> Pin 6 (GND)
+SDA             -> Pin 3 (GPIO 2 / I2C SDA)
+SCL             -> Pin 5 (GPIO 3 / I2C SCL)
+```
+
+**Benefits of Caddx Infra 256:**
+- ✅ Simpler wiring (4 wires vs 6)
+- ✅ Infrared technology (better in varied lighting)
+- ✅ Lower power consumption
+- ✅ I2C interface (easier debugging)
 
 **Important**: Ensure the sensor is mounted facing downward with adequate lighting for optical tracking.
 

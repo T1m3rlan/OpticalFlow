@@ -137,7 +137,8 @@ def send_command():
 def get_camera_types():
     """Get available camera types"""
     camera_types = [
-        {'id': 'pmw3901', 'name': 'PMW3901 Optical Flow Sensor'},
+        {'id': 'pmw3901', 'name': 'PMW3901 Optical Flow Sensor (SPI)'},
+        {'id': 'caddx_infra256', 'name': 'Caddx Infra 256 (I2C)'},
         {'id': 'usb_camera', 'name': 'USB Camera (OpenCV)'},
         {'id': 'csi_camera', 'name': 'Raspberry Pi Camera (CSI)'},
         {'id': 'analog_usb', 'name': 'Analog Camera via USB Capture'},

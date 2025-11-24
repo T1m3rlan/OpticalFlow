@@ -1,6 +1,6 @@
 """
 Optical Flow Sensor Interface for Raspberry Pi Zero
-Supports PMW3901 optical flow sensor for position tracking
+Supports PMW3901 and Caddx Infra 256 optical flow sensors for position tracking
 """
 
 import time
@@ -10,6 +10,14 @@ import logging
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Try to import Caddx Infra 256
+try:
+    from caddx_infra256 import CaddxInfra256
+    CADDX_AVAILABLE = True
+except ImportError:
+    CADDX_AVAILABLE = False
+    logger.warning("Caddx Infra 256 support not available")
 
 
 class PMW3901:

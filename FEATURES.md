@@ -68,7 +68,8 @@ hostname -I
 
 ### Overview
 Now supports multiple camera types for optical flow:
-- **PMW3901**: Dedicated optical flow sensor (original)
+- **PMW3901**: Dedicated optical flow sensor (SPI) - Original
+- **Caddx Infra 256**: Infrared optical flow sensor (I2C) - **NEW!**
 - **USB Cameras**: Standard webcams
 - **CSI Cameras**: Raspberry Pi Camera Module
 - **Analog Cameras**: FPV cameras via USB capture cards
@@ -127,6 +128,34 @@ cap.release()
 ```
 
 ### Camera Types Configuration
+
+#### Caddx Infra 256 (I2C Infrared Sensor)
+```json
+{
+  "sensor": {
+    "type": "caddx_infra256"
+  },
+  "sensor": {
+    "i2c_bus": 1,
+    "i2c_address": 41,
+    "rotation": 0
+  }
+}
+```
+
+**Advantages:**
+- Infrared technology (better in various lighting)
+- Simple I2C wiring (4 wires vs 6 for SPI)
+- Lower power consumption
+- Excellent for indoor/outdoor use
+
+**Setup:**
+1. Enable I2C: `sudo raspi-config` -> Interface Options -> I2C
+2. Wire to Pi: VCC(3.3V), GND, SDA(Pin 3), SCL(Pin 5)
+3. Test: `sudo i2cdetect -y 1` (should show 0x29)
+4. Run: `python3 caddx_infra256.py` to test
+
+See **[CADDX_INFRA256_GUIDE.md](CADDX_INFRA256_GUIDE.md)** for complete setup guide.
 
 #### USB Camera (Webcam)
 ```json
@@ -465,6 +494,7 @@ sudo cat /dev/ttyAMA0  # Should see garbage if SBUS working
 | Feature | Pi Zero | Pi Zero 2W | Pi 4 |
 |---------|---------|------------|------|
 | PMW3901 | 50Hz ✓ | 100Hz ✓ | 100Hz ✓ |
+| Caddx Infra 256 | 50Hz ✓ | 100Hz ✓ | 100Hz ✓ |
 | USB Camera 320x240 | 30Hz ✓ | 50Hz ✓ | 100Hz ✓ |
 | USB Camera 640x480 | 15Hz ⚠️ | 30Hz ✓ | 60Hz ✓ |
 | Analog 720x480 | 10Hz ⚠️ | 30Hz ✓ | 50Hz ✓ |
@@ -500,6 +530,23 @@ sudo cat /dev/ttyAMA0  # Should see garbage if SBUS working
   "control": {"update_rate_hz": 50},
   "stick_input": {"enabled": true, "protocol": "sbus"},
   "web_interface": {"enabled": true}
+}
+```
+
+### Configuration 4: Caddx Infra 256 (Recommended for Production)
+```json
+{
+  "sensor": {
+    "type": "caddx_infra256",
+    "i2c_address": 41,
+    "rotation": 0
+  },
+  "tracker": {
+    "scale_factor": 0.001,
+    "initial_height": 0.8
+  },
+  "control": {"update_rate_hz": 50},
+  "stick_input": {"enabled": true, "protocol": "sbus"}
 }
 ```
 
