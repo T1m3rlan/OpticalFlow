@@ -1,0 +1,826 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BetaFly Stabilization Control</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        .header h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        
+        .status-bar {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        
+        .status-item {
+            padding: 10px 15px;
+            background: #f0f0f0;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        
+        .status-item.active {
+            background: #4caf50;
+            color: white;
+        }
+        
+        .status-item.stopped {
+            background: #f44336;
+            color: white;
+        }
+        
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        
+        @media (max-width: 1024px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        .card {
+            background: white;
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        .card h2 {
+            color: #333;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #667eea;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #555;
+            font-weight: 500;
+        }
+        
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+        
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        
+        button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 5px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #5568d3;
+        }
+        
+        .btn-success {
+            background: #4caf50;
+            color: white;
+        }
+        
+        .btn-success:hover {
+            background: #45a049;
+        }
+        
+        .btn-danger {
+            background: #f44336;
+            color: white;
+        }
+        
+        .btn-danger:hover {
+            background: #da190b;
+        }
+        
+        .btn-secondary {
+            background: #757575;
+            color: white;
+        }
+        
+        .btn-secondary:hover {
+            background: #616161;
+        }
+        
+        .manual-control {
+            text-align: center;
+        }
+        
+        .joystick-container {
+            display: flex;
+            justify-content: center;
+            gap: 40px;
+            margin: 30px 0;
+        }
+        
+        .joystick {
+            width: 200px;
+            height: 200px;
+            border: 3px solid #667eea;
+            border-radius: 50%;
+            position: relative;
+            background: #f0f0f0;
+            cursor: pointer;
+        }
+        
+        .joystick-knob {
+            width: 40px;
+            height: 40px;
+            background: #667eea;
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            transition: all 0.1s;
+        }
+        
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #ddd;
+        }
+        
+        .tab {
+            padding: 10px 20px;
+            cursor: pointer;
+            border: none;
+            background: none;
+            font-size: 16px;
+            color: #666;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s;
+        }
+        
+        .tab.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        .message {
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        
+        .message.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .message.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .visualization {
+            height: 300px;
+            background: #f0f0f0;
+            border-radius: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #999;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🐝 BetaFly Stabilization Control</h1>
+            <div class="status-bar">
+                <div class="status-item" id="status-running">Status: Stopped</div>
+                <div class="status-item" id="status-mode">Mode: Auto</div>
+                <div class="status-item" id="status-fps">FPS: 0</div>
+            </div>
+        </div>
+        
+        <div id="message" class="message"></div>
+        
+        <div class="main-content">
+            <div class="card">
+                <div class="tabs">
+                    <button class="tab active" onclick="showTab('camera')">Camera</button>
+                    <button class="tab" onclick="showTab('pid')">PID Control</button>
+                    <button class="tab" onclick="showTab('hardware')">Hardware</button>
+                    <button class="tab" onclick="showTab('advanced')">Advanced</button>
+                </div>
+                
+                <div id="camera" class="tab-content active">
+                    <h2>Camera Settings</h2>
+                    <div class="form-group">
+                        <label>Camera Type</label>
+                        <select id="camera-type">
+                            <option value="usb">USB Camera</option>
+                            <option value="analog">Analog Camera (v4l2)</option>
+                            <option value="raspberry">Raspberry Pi Camera</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Camera Device</label>
+                        <select id="camera-index"></select>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Width</label>
+                            <input type="number" id="camera-width" min="160" max="1920" step="160">
+                        </div>
+                        <div class="form-group">
+                            <label>Height</label>
+                            <input type="number" id="camera-height" min="120" max="1080" step="120">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>FPS</label>
+                        <input type="number" id="camera-fps" min="10" max="60" step="5">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Center X</label>
+                            <input type="number" id="camera-center-x" step="1">
+                        </div>
+                        <div class="form-group">
+                            <label>Center Y</label>
+                            <input type="number" id="camera-center-y" step="1">
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="pid" class="tab-content">
+                    <h2>PID Control - X Axis</h2>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>KP (Proportional)</label>
+                            <input type="number" id="pid-kp-x" step="0.01" min="0">
+                        </div>
+                        <div class="form-group">
+                            <label>KI (Integral)</label>
+                            <input type="number" id="pid-ki-x" step="0.001" min="0">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>KD (Derivative)</label>
+                        <input type="number" id="pid-kd-x" step="0.01" min="0">
+                    </div>
+                    
+                    <h2 style="margin-top: 30px;">PID Control - Y Axis</h2>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>KP (Proportional)</label>
+                            <input type="number" id="pid-kp-y" step="0.01" min="0">
+                        </div>
+                        <div class="form-group">
+                            <label>KI (Integral)</label>
+                            <input type="number" id="pid-ki-y" step="0.001" min="0">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>KD (Derivative)</label>
+                        <input type="number" id="pid-kd-y" step="0.01" min="0">
+                    </div>
+                </div>
+                
+                <div id="hardware" class="tab-content">
+                    <h2>Hardware Configuration</h2>
+                    <div class="form-group">
+                        <label>Control Type</label>
+                        <select id="use-servos">
+                            <option value="true">Servos</option>
+                            <option value="false">Motors</option>
+                        </select>
+                    </div>
+                    <div id="servo-config">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Servo X Pin (GPIO)</label>
+                                <input type="number" id="servo-x-pin" min="0" max="27">
+                            </div>
+                            <div class="form-group">
+                                <label>Servo Y Pin (GPIO)</label>
+                                <input type="number" id="servo-y-pin" min="0" max="27">
+                            </div>
+                        </div>
+                    </div>
+                    <div id="motor-config" style="display: none;">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Motor X Forward Pin</label>
+                                <input type="number" id="motor-x-forward-pin" min="0" max="27">
+                            </div>
+                            <div class="form-group">
+                                <label>Motor X Backward Pin</label>
+                                <input type="number" id="motor-x-backward-pin" min="0" max="27">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Motor Y Forward Pin</label>
+                                <input type="number" id="motor-y-forward-pin" min="0" max="27">
+                            </div>
+                            <div class="form-group">
+                                <label>Motor Y Backward Pin</label>
+                                <input type="number" id="motor-y-backward-pin" min="0" max="27">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="advanced" class="tab-content">
+                    <h2>Advanced Settings</h2>
+                    <div class="form-group">
+                        <label>Control Frequency (Hz)</label>
+                        <input type="number" id="control-frequency" step="1" min="10" max="100">
+                    </div>
+                    <div class="form-group">
+                        <label>Max Control Output</label>
+                        <input type="number" id="max-control-output" step="1" min="10" max="200">
+                    </div>
+                    <div class="form-group">
+                        <label>Min Tracking Points</label>
+                        <input type="number" id="min-tracking-points" step="1" min="5" max="200">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Displacement Scale X</label>
+                            <input type="number" id="displacement-scale-x" step="0.1" min="0.1" max="10">
+                        </div>
+                        <div class="form-group">
+                            <label>Displacement Scale Y</label>
+                            <input type="number" id="displacement-scale-y" step="0.1" min="0.1" max="10">
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="button-group">
+                    <button class="btn-primary" onclick="saveConfig()">Save Configuration</button>
+                    <button class="btn-secondary" onclick="resetConfig()">Reset to Defaults</button>
+                </div>
+            </div>
+            
+            <div class="card">
+                <h2>Control Panel</h2>
+                <div class="button-group">
+                    <button class="btn-success" id="btn-start" onclick="startController()">Start</button>
+                    <button class="btn-danger" id="btn-stop" onclick="stopController()" disabled>Stop</button>
+                </div>
+                
+                <div style="margin-top: 20px;">
+                    <label>Control Mode:</label>
+                    <select id="control-mode" onchange="setControlMode()" style="margin-left: 10px; padding: 8px;">
+                        <option value="auto">Auto (Optical Flow)</option>
+                        <option value="manual">Manual (Stick Input)</option>
+                        <option value="poshold">Position Hold</option>
+                    </select>
+                </div>
+                
+                <div class="manual-control" style="margin-top: 30px;">
+                    <h3>Manual Control</h3>
+                    <div class="joystick-container">
+                        <div>
+                            <div class="joystick" id="joystick-x" onmousedown="startJoystick('x', event)" ontouchstart="startJoystick('x', event)">
+                                <div class="joystick-knob" id="knob-x"></div>
+                            </div>
+                            <p style="margin-top: 10px; text-align: center;">X Axis</p>
+                        </div>
+                        <div>
+                            <div class="joystick" id="joystick-y" onmousedown="startJoystick('y', event)" ontouchstart="startJoystick('y', event)">
+                                <div class="joystick-knob" id="knob-y"></div>
+                            </div>
+                            <p style="margin-top: 10px; text-align: center;">Y Axis</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="visualization">
+                    <div>
+                        <p>Position Visualization</p>
+                        <p id="position-info">X: 0, Y: 0</p>
+                        <p id="target-info">Target: X: 0, Y: 0</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        let config = {};
+        let joystickActive = {x: false, y: false};
+        
+        // Load configuration on page load
+        window.addEventListener('DOMContentLoaded', () => {
+            loadConfig();
+            loadCameras();
+            startStatusUpdates();
+        });
+        
+        function showTab(tabName) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            event.target.classList.add('active');
+            document.getElementById(tabName).classList.add('active');
+        }
+        
+        async function loadConfig() {
+            try {
+                const response = await fetch('/api/config');
+                config = await response.json();
+                populateForm(config);
+            } catch (error) {
+                showMessage('Error loading configuration: ' + error.message, 'error');
+            }
+        }
+        
+        function populateForm(data) {
+            // Camera settings
+            document.getElementById('camera-type').value = data.CAMERA_TYPE || 'usb';
+            document.getElementById('camera-index').value = data.CAMERA_INDEX || 0;
+            document.getElementById('camera-width').value = data.CAMERA_WIDTH || 640;
+            document.getElementById('camera-height').value = data.CAMERA_HEIGHT || 480;
+            document.getElementById('camera-fps').value = data.CAMERA_FPS || 30;
+            document.getElementById('camera-center-x').value = data.CAMERA_CENTER_X || 320;
+            document.getElementById('camera-center-y').value = data.CAMERA_CENTER_Y || 240;
+            
+            // PID settings
+            document.getElementById('pid-kp-x').value = data.PID_KP_X || 0.5;
+            document.getElementById('pid-ki-x').value = data.PID_KI_X || 0.01;
+            document.getElementById('pid-kd-x').value = data.PID_KD_X || 0.1;
+            document.getElementById('pid-kp-y').value = data.PID_KP_Y || 0.5;
+            document.getElementById('pid-ki-y').value = data.PID_KI_Y || 0.01;
+            document.getElementById('pid-kd-y').value = data.PID_KD_Y || 0.1;
+            
+            // Hardware settings
+            document.getElementById('use-servos').value = data.USE_SERVOS ? 'true' : 'false';
+            toggleHardwareConfig();
+            document.getElementById('servo-x-pin').value = data.SERVO_X_PIN || 18;
+            document.getElementById('servo-y-pin').value = data.SERVO_Y_PIN || 19;
+            document.getElementById('motor-x-forward-pin').value = data.MOTOR_X_FORWARD_PIN || 17;
+            document.getElementById('motor-x-backward-pin').value = data.MOTOR_X_BACKWARD_PIN || 27;
+            document.getElementById('motor-y-forward-pin').value = data.MOTOR_Y_FORWARD_PIN || 22;
+            document.getElementById('motor-y-backward-pin').value = data.MOTOR_Y_BACKWARD_PIN || 23;
+            
+            // Advanced settings
+            document.getElementById('control-frequency').value = data.CONTROL_FREQUENCY || 30;
+            document.getElementById('max-control-output').value = data.MAX_CONTROL_OUTPUT || 100;
+            document.getElementById('min-tracking-points').value = data.MIN_TRACKING_POINTS || 10;
+            document.getElementById('displacement-scale-x').value = data.DISPLACEMENT_SCALE_X || 1.0;
+            document.getElementById('displacement-scale-y').value = data.DISPLACEMENT_SCALE_Y || 1.0;
+        }
+        
+        document.getElementById('use-servos').addEventListener('change', toggleHardwareConfig);
+        
+        function toggleHardwareConfig() {
+            const useServos = document.getElementById('use-servos').value === 'true';
+            document.getElementById('servo-config').style.display = useServos ? 'block' : 'none';
+            document.getElementById('motor-config').style.display = useServos ? 'none' : 'block';
+        }
+        
+        async function loadCameras() {
+            try {
+                const response = await fetch('/api/cameras');
+                const data = await response.json();
+                const select = document.getElementById('camera-index');
+                select.innerHTML = '';
+                data.cameras.forEach(cam => {
+                    const option = document.createElement('option');
+                    option.value = cam.index;
+                    option.textContent = `${cam.name} (${cam.width}x${cam.height})`;
+                    select.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error loading cameras:', error);
+            }
+        }
+        
+        async function saveConfig() {
+            const data = {
+                CAMERA_TYPE: document.getElementById('camera-type').value,
+                CAMERA_INDEX: parseInt(document.getElementById('camera-index').value),
+                CAMERA_WIDTH: parseInt(document.getElementById('camera-width').value),
+                CAMERA_HEIGHT: parseInt(document.getElementById('camera-height').value),
+                CAMERA_FPS: parseInt(document.getElementById('camera-fps').value),
+                CAMERA_CENTER_X: parseFloat(document.getElementById('camera-center-x').value),
+                CAMERA_CENTER_Y: parseFloat(document.getElementById('camera-center-y').value),
+                PID_KP_X: parseFloat(document.getElementById('pid-kp-x').value),
+                PID_KI_X: parseFloat(document.getElementById('pid-ki-x').value),
+                PID_KD_X: parseFloat(document.getElementById('pid-kd-x').value),
+                PID_KP_Y: parseFloat(document.getElementById('pid-kp-y').value),
+                PID_KI_Y: parseFloat(document.getElementById('pid-ki-y').value),
+                PID_KD_Y: parseFloat(document.getElementById('pid-kd-y').value),
+                USE_SERVOS: document.getElementById('use-servos').value === 'true',
+                SERVO_X_PIN: parseInt(document.getElementById('servo-x-pin').value),
+                SERVO_Y_PIN: parseInt(document.getElementById('servo-y-pin').value),
+                MOTOR_X_FORWARD_PIN: parseInt(document.getElementById('motor-x-forward-pin').value),
+                MOTOR_X_BACKWARD_PIN: parseInt(document.getElementById('motor-x-backward-pin').value),
+                MOTOR_Y_FORWARD_PIN: parseInt(document.getElementById('motor-y-forward-pin').value),
+                MOTOR_Y_BACKWARD_PIN: parseInt(document.getElementById('motor-y-backward-pin').value),
+                CONTROL_FREQUENCY: parseFloat(document.getElementById('control-frequency').value),
+                MAX_CONTROL_OUTPUT: parseFloat(document.getElementById('max-control-output').value),
+                MIN_TRACKING_POINTS: parseInt(document.getElementById('min-tracking-points').value),
+                DISPLACEMENT_SCALE_X: parseFloat(document.getElementById('displacement-scale-x').value),
+                DISPLACEMENT_SCALE_Y: parseFloat(document.getElementById('displacement-scale-y').value)
+            };
+            
+            try {
+                const response = await fetch('/api/config', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(data)
+                });
+                const result = await response.json();
+                if (result.status === 'success') {
+                    showMessage('Configuration saved successfully!', 'success');
+                    config = data;
+                } else {
+                    showMessage('Error: ' + result.message, 'error');
+                }
+            } catch (error) {
+                showMessage('Error saving configuration: ' + error.message, 'error');
+            }
+        }
+        
+        async function resetConfig() {
+            if (!confirm('Reset configuration to defaults?')) return;
+            
+            try {
+                const response = await fetch('/api/config/reset', {method: 'POST'});
+                const result = await response.json();
+                if (result.status === 'success') {
+                    showMessage('Configuration reset to defaults', 'success');
+                    loadConfig();
+                } else {
+                    showMessage('Error: ' + result.message, 'error');
+                }
+            } catch (error) {
+                showMessage('Error resetting configuration: ' + error.message, 'error');
+            }
+        }
+        
+        async function startController() {
+            try {
+                const response = await fetch('/api/control/start', {method: 'POST'});
+                const result = await response.json();
+                if (result.status === 'success') {
+                    showMessage('Controller started', 'success');
+                    document.getElementById('btn-start').disabled = true;
+                    document.getElementById('btn-stop').disabled = false;
+                } else {
+                    showMessage('Error: ' + result.message, 'error');
+                }
+            } catch (error) {
+                showMessage('Error starting controller: ' + error.message, 'error');
+            }
+        }
+        
+        async function stopController() {
+            try {
+                const response = await fetch('/api/control/stop', {method: 'POST'});
+                const result = await response.json();
+                if (result.status === 'success') {
+                    showMessage('Controller stopped', 'success');
+                    document.getElementById('btn-start').disabled = false;
+                    document.getElementById('btn-stop').disabled = true;
+                } else {
+                    showMessage('Error: ' + result.message, 'error');
+                }
+            } catch (error) {
+                showMessage('Error stopping controller: ' + error.message, 'error');
+            }
+        }
+        
+        async function setControlMode() {
+            const mode = document.getElementById('control-mode').value;
+            try {
+                const response = await fetch('/api/control/mode', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({mode: mode})
+                });
+                const result = await response.json();
+                if (result.status === 'success') {
+                    showMessage(`Control mode set to ${mode}`, 'success');
+                }
+            } catch (error) {
+                showMessage('Error setting control mode: ' + error.message, 'error');
+            }
+        }
+        
+        function startJoystick(axis, event) {
+            joystickActive[axis] = true;
+            const joystick = document.getElementById(`joystick-${axis}`);
+            const knob = document.getElementById(`knob-${axis}`);
+            
+            const moveKnob = (e) => {
+                if (!joystickActive[axis]) return;
+                
+                const rect = joystick.getBoundingClientRect();
+                const centerX = rect.left + rect.width / 2;
+                const centerY = rect.top + rect.height / 2;
+                
+                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+                
+                const dx = clientX - centerX;
+                const dy = clientY - centerY;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                const maxDistance = rect.width / 2 - 20;
+                
+                const angle = Math.atan2(dy, dx);
+                const clampedDistance = Math.min(distance, maxDistance);
+                
+                const x = Math.cos(angle) * clampedDistance;
+                const y = Math.sin(angle) * clampedDistance;
+                
+                knob.style.transform = `translate(calc(-50% + ${x}px), calc(-50% + ${y}px))`;
+                
+                // Send manual input
+                const value = axis === 'x' ? x / maxDistance : y / maxDistance;
+                
+                // Get both joystick values for combined input
+                const knobX = document.getElementById('knob-x');
+                const knobY = document.getElementById('knob-y');
+                const rectX = document.getElementById('joystick-x').getBoundingClientRect();
+                const rectY = document.getElementById('joystick-y').getBoundingClientRect();
+                
+                const xPos = knobX.style.transform.match(/translate\(calc\(-50% \+ ([\d.-]+)px\)/);
+                const yPos = knobY.style.transform.match(/translate\(calc\(-50% \+ ([\d.-]+)px\)/);
+                
+                const xVal = xPos ? parseFloat(xPos[1]) / (rectX.width / 2 - 20) : 0;
+                const yVal = yPos ? parseFloat(yPos[1]) / (rectY.width / 2 - 20) : 0;
+                
+                if (axis === 'x') {
+                    sendManualInputBoth(value, yVal);
+                } else {
+                    sendManualInputBoth(xVal, value);
+                }
+            };
+            
+            const stopJoystick = () => {
+                joystickActive[axis] = false;
+                knob.style.transform = 'translate(-50%, -50%)';
+                sendManualInput(axis, 0);
+                document.removeEventListener('mousemove', moveKnob);
+                document.removeEventListener('mouseup', stopJoystick);
+                document.removeEventListener('touchmove', moveKnob);
+                document.removeEventListener('touchend', stopJoystick);
+            };
+            
+            document.addEventListener('mousemove', moveKnob);
+            document.addEventListener('mouseup', stopJoystick);
+            document.addEventListener('touchmove', moveKnob);
+            document.addEventListener('touchend', stopJoystick);
+            
+            moveKnob(event);
+        }
+        
+        async function sendManualInput(axis, value) {
+            // Send manual input to controller
+            try {
+                const data = axis === 'x' ? {x: value, y: 0} : {x: 0, y: value};
+                await fetch('/api/control/manual', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(data)
+                });
+            } catch (error) {
+                console.error('Error sending manual input:', error);
+            }
+        }
+        
+        async function sendManualInputBoth(x, y) {
+            // Send both X and Y manual inputs
+            try {
+                await fetch('/api/control/manual', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({x: x, y: y})
+                });
+            } catch (error) {
+                console.error('Error sending manual input:', error);
+            }
+        }
+        
+        async function startStatusUpdates() {
+            setInterval(async () => {
+                try {
+                    const response = await fetch('/api/status');
+                    const status = await response.json();
+                    
+                    document.getElementById('status-running').textContent = 
+                        `Status: ${status.running ? 'Running' : 'Stopped'}`;
+                    document.getElementById('status-running').className = 
+                        `status-item ${status.running ? 'active' : 'stopped'}`;
+                    document.getElementById('status-mode').textContent = 
+                        `Mode: ${status.mode}`;
+                    document.getElementById('status-fps').textContent = 
+                        `FPS: ${status.fps.toFixed(1)}`;
+                    
+                    document.getElementById('position-info').textContent = 
+                        `X: ${status.position.x.toFixed(1)}, Y: ${status.position.y.toFixed(1)}`;
+                    document.getElementById('target-info').textContent = 
+                        `Target: X: ${status.target.x.toFixed(1)}, Y: ${status.target.y.toFixed(1)}`;
+                    
+                    if (status.running) {
+                        document.getElementById('btn-start').disabled = true;
+                        document.getElementById('btn-stop').disabled = false;
+                    } else {
+                        document.getElementById('btn-start').disabled = false;
+                        document.getElementById('btn-stop').disabled = true;
+                    }
+                } catch (error) {
+                    console.error('Error updating status:', error);
+                }
+            }, 500);
+        }
+        
+        function showMessage(text, type) {
+            const msg = document.getElementById('message');
+            msg.textContent = text;
+            msg.className = `message ${type}`;
+            msg.style.display = 'block';
+            setTimeout(() => {
+                msg.style.display = 'none';
+            }, 3000);
+        }
+    </script>
+</body>
+</html>

@@ -7,8 +7,12 @@ This project implements an optical position stabilization system for BetaFly usi
 - **Optical Flow Detection**: Uses Lucas-Kanade optical flow algorithm to track position changes
 - **PID Control**: Dual-axis PID controllers for precise stabilization
 - **Hardware Support**: Supports both servo and motor control
+- **Web Interface**: Beautiful GUI for configuration and monitoring
+- **Multiple Camera Types**: USB, Analog (v4l2), and Raspberry Pi camera support
+- **Manual Control**: Joystick/stick input support (USB joystick or GPIO-based)
+- **Position Hold Mode**: Manual stick input with automatic position stabilization
 - **Simulation Mode**: Can run without hardware for testing
-- **Configurable**: Easy-to-modify configuration parameters
+- **Configurable**: Easy-to-modify configuration parameters with persistent storage
 
 ## Hardware Requirements
 
@@ -24,6 +28,8 @@ This project implements an optical position stabilization system for BetaFly usi
 - Python 3.7+
 - OpenCV with camera support
 - GPIO libraries (RPi.GPIO and/or gpiozero)
+- Flask (for web interface)
+- Pygame (for USB joystick support, optional)
 
 ## Installation
 
@@ -40,6 +46,11 @@ This project implements an optical position stabilization system for BetaFly usi
    pip3 install -r requirements.txt
    ```
 
+   **Note**: Some packages may require system dependencies:
+   ```bash
+   sudo apt-get install -y python3-flask python3-pygame python3-spidev
+   ```
+
 4. **Enable camera interface** (if not already enabled):
    ```bash
    sudo raspi-config
@@ -54,7 +65,13 @@ This project implements an optical position stabilization system for BetaFly usi
 
 ## Configuration
 
-Edit `config.py` to adjust parameters:
+### Web Interface (Recommended)
+
+Access the web interface at `http://raspberry-pi-ip:5000` to configure all settings through a user-friendly GUI.
+
+### Manual Configuration
+
+Edit `config.py` or modify `betafly_config.json` to adjust parameters:
 
 ### Camera Settings
 - `CAMERA_WIDTH`, `CAMERA_HEIGHT`: Camera resolution
@@ -71,6 +88,15 @@ Edit `config.py` to adjust parameters:
 - `SERVO_X_PIN`, `SERVO_Y_PIN`: GPIO pins for servos (use PWM-capable pins: 12, 13, 18, 19)
 - `MOTOR_X/Y_FORWARD_PIN`, `MOTOR_X/Y_BACKWARD_PIN`: GPIO pins for motors
 
+### Camera Configuration
+- `CAMERA_TYPE`: `'usb'`, `'analog'`, or `'raspberry'`
+- `CAMERA_INDEX`: Camera device index (typically 0, 1, etc.)
+
+### Control Modes
+- `CONTROL_MODE`: `'auto'` (optical flow), `'manual'` (direct stick control), or `'poshold'` (position hold with stick input)
+- `JOYSTICK_DEVICE`: Path to joystick device (default: `/dev/input/js0`)
+- `USE_GPIO_STICKS`: Set to `True` for GPIO-based analog stick inputs
+
 ## Wiring
 
 ### Servo Configuration
@@ -86,12 +112,28 @@ Edit `config.py` to adjust parameters:
 
 ## Usage
 
-1. **Basic usage**:
+1. **Start with web interface** (recommended):
+   ```bash
+   python3 main.py
+   ```
+   Then open your browser to `http://raspberry-pi-ip:5000`
+
+2. **Start without web interface**:
+   ```bash
+   python3 main.py --no-web
+   ```
+
+3. **Start with custom web port**:
+   ```bash
+   python3 main.py --web-port 8080
+   ```
+
+4. **Legacy direct usage**:
    ```bash
    python3 stabilization_controller.py
    ```
 
-2. **With custom configuration** (using environment variables):
+5. **With custom configuration** (using environment variables):
    ```bash
    PID_KP_X=0.8 PID_KI_X=0.02 python3 stabilization_controller.py
    ```
@@ -124,6 +166,35 @@ Edit `config.py` to adjust parameters:
 - Reduce camera resolution for higher frame rates
 - Adjust `MIN_TRACKING_POINTS` based on environment
 - Tune `DISPLACEMENT_SCALE_X/Y` to match your setup
+
+## Control Modes
+
+### Auto Mode (Optical Flow)
+- Automatically stabilizes position using optical flow detection
+- Requires camera input
+- Best for autonomous stabilization
+
+### Manual Mode
+- Direct control from joystick/stick inputs
+- No position stabilization
+- Useful for manual flight control
+
+### Position Hold Mode
+- Combines manual stick input with automatic position stabilization
+- Use stick to set target position
+- System automatically maintains that position
+- Ideal for precise positioning
+
+## Web Interface
+
+The web interface provides:
+- **Real-time Status**: Current position, FPS, control mode
+- **Configuration Tabs**: Camera, PID, Hardware, Advanced settings
+- **Control Panel**: Start/stop controller, switch modes
+- **Manual Control**: On-screen joysticks for manual input
+- **Live Updates**: Configuration changes apply immediately
+
+Access the web interface by running `python3 main.py` and opening your browser to the Raspberry Pi's IP address on port 5000.
 
 ## Troubleshooting
 

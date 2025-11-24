@@ -4,7 +4,9 @@ Configuration file for optical position stabilization system
 """
 
 import os
-from dataclasses import dataclass
+import json
+from dataclasses import dataclass, asdict
+from typing import Dict, Any
 
 
 @dataclass
@@ -12,6 +14,7 @@ class Config:
     """Configuration parameters"""
     
     # Camera settings
+    CAMERA_TYPE: str = 'usb'  # 'usb', 'analog', 'raspberry'
     CAMERA_INDEX: int = 0
     CAMERA_WIDTH: int = 640
     CAMERA_HEIGHT: int = 480
@@ -56,6 +59,30 @@ class Config:
     # Logging
     LOG_INTERVAL: int = 30  # Log every N frames
     
+    # Control mode
+    CONTROL_MODE: str = 'auto'  # 'auto', 'manual', 'poshold'
+    
+    # Joystick settings
+    JOYSTICK_DEVICE: str = '/dev/input/js0'  # Joystick device path
+    USE_GPIO_STICKS: bool = False  # Use GPIO-based stick inputs
+    STICK_X_PIN_A: int = 0  # GPIO pin for X axis analog input A
+    STICK_X_PIN_B: int = 1  # GPIO pin for X axis analog input B
+    STICK_Y_PIN_A: int = 2  # GPIO pin for Y axis analog input A
+    STICK_Y_PIN_B: int = 3  # GPIO pin for Y axis analog input B
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert config to dictionary"""
+        return asdict(self)
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'Config':
+        """Create config from dictionary"""
+        config = cls()
+        for key, value in data.items():
+            if hasattr(config, key):
+                setattr(config, key, value)
+        return config
+    
     @classmethod
     def from_env(cls) -> 'Config':
         """Create config from environment variables"""
@@ -87,3 +114,49 @@ class Config:
             config.USE_SERVOS = os.getenv('USE_SERVOS').lower() == 'true'
         
         return config
+
+
+class ConfigManager:
+    """Manages configuration loading and saving"""
+    
+    CONFIG_FILE = 'betafly_config.json'
+    
+    def __init__(self, config_file: str = None):
+        self.config_file = config_file or self.CONFIG_FILE
+        self.config = Config()
+        self.load()
+    
+    def load(self) -> None:
+        """Load configuration from file"""
+        if os.path.exists(self.config_file):
+            try:
+                with open(self.config_file, 'r') as f:
+                    data = json.load(f)
+                    self.config = Config.from_dict(data)
+            except Exception as e:
+                print(f"Error loading config: {e}. Using defaults.")
+                self.config = Config()
+        else:
+            self.config = Config()
+    
+    def save(self) -> None:
+        """Save configuration to file"""
+        try:
+            with open(self.config_file, 'w') as f:
+                json.dump(self.config.to_dict(), f, indent=2)
+        except Exception as e:
+            print(f"Error saving config: {e}")
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Get configuration as dictionary"""
+        return self.config.to_dict()
+    
+    def update_from_dict(self, data: Dict[str, Any]) -> None:
+        """Update configuration from dictionary"""
+        for key, value in data.items():
+            if hasattr(self.config, key):
+                setattr(self.config, key, value)
+    
+    def reset_to_defaults(self) -> None:
+        """Reset configuration to defaults"""
+        self.config = Config()
