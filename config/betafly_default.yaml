@@ -5,6 +5,25 @@ camera:
   device_index: 0
   use_picamera: false
   rotation_deg: 0
+  source: opencv
+  flip_horizontal: false
+  flip_vertical: false
+  analog_profile: ntsc
+  analog_profiles:
+    ntsc:
+      device: /dev/video0
+      width: 640
+      height: 480
+      framerate: 30
+      standard: NTSC
+      input_channel: 0
+    pal_longbow:
+      device: /dev/video1
+      width: 720
+      height: 576
+      framerate: 25
+      standard: PAL
+      input_channel: 0
 
 tracker:
   max_corners: 150
@@ -51,3 +70,14 @@ tilt_actuator:
 control_rate_hz: 25.0
 preview: false
 log_path: telemetry.csv
+manual_input:
+  enabled: false
+  device: null
+  mode: gamepad
+  roll_axis: ABS_X
+  pitch_axis: ABS_Y
+  axis_min: -32768
+  axis_max: 32767
+  deadband: 0.05
+  scale: 0.4
+  fail_safe_timeout_s: 1.5

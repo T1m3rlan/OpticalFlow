@@ -33,6 +33,16 @@ The Betafly stabilizer is split into four cooperating subsystems that exchange s
 
 Telemetry (timestamp, dx/dy, PID terms, servo outputs, quality) is streamed via CSV logging for offline analysis. The CLI can also emit a ZeroMQ stream for remote dashboards if needed.
 
+### Manual Stick Fusion (`manual_input.ManualInputSource`)
+- Reads HID/RC joystick events via the `inputs` library (evdev) and normalizes them to `[-1, 1]`.
+- Applies a deadband and scale factor before subtracting the offsets from the optical error (poshold with “nudge” capability).
+- Fails safe to zero after a configurable timeout or device disconnect and logs the live offsets in telemetry for post-flight tuning.
+
+### Local Web Console (`webui`)
+- Flask-based UI served by `python -m betafly_stabilizer webui`.
+- Provides form controls for the most common tuning knobs (camera mode, PID gains, manual input scaling, preview toggle).
+- Includes a raw YAML editor with in-browser validation to cover advanced options like analog profile dictionaries or ROI masks.
+
 ### Calibration & Tuning Flow
 1. Run `python -m betafly_stabilizer --preview --log calibration.csv`.
 2. Physically lock the Betafly payload and capture baseline servo neutral offsets.

@@ -13,6 +13,7 @@ from .actuators import GimbalActuator
 from .camera import CameraStream
 from .config import StabilizerConfig
 from .controller import PositionController
+from .manual_input import ManualInputSource
 from .tracker import OpticalFlowTracker, TrackingResult
 
 try:
@@ -43,6 +44,8 @@ class TelemetryLogger:
                     "tilt_output",
                     "pan_pulse",
                     "tilt_pulse",
+                    "manual_roll",
+                    "manual_pitch",
                 ],
             )
             self._writer.writeheader()
@@ -70,6 +73,7 @@ class OpticalPositionStabilizer:
         self.gimbal = GimbalActuator.from_configs(config.pan_actuator, config.tilt_actuator)
         self.preview = config.preview
         self._last_overlay = time.monotonic()
+        self.manual_input = ManualInputSource(config.manual_input)
 
     def _normalize_error(self, result: TrackingResult) -> tuple[float, float]:
         width, height = self.camera.resolution
@@ -108,6 +112,7 @@ class OpticalPositionStabilizer:
         last_ts: Optional[float] = None
         target_period = 1.0 / max(1e-3, self.config.control_rate_hz)
 
+        self.manual_input.start()
         with self.camera, TelemetryLogger(self.config.log_path) as logger:
             try:
                 while True:
@@ -116,7 +121,10 @@ class OpticalPositionStabilizer:
                     last_ts = timestamp
 
                     tracking = self.tracker.track(frame)
+                    manual_roll, manual_pitch = self.manual_input.get_offsets()
                     err_x, err_y = self._normalize_error(tracking)
+                    err_x -= manual_roll
+                    err_y -= manual_pitch
                     pan_out, tilt_out, _ = self.controller.update(err_x, err_y, dt)
                     outputs = self.gimbal.set_demands(-pan_out, -tilt_out)
 
@@ -130,6 +138,8 @@ class OpticalPositionStabilizer:
                         tilt_output=tilt_out,
                         pan_pulse=outputs.pan_pulse,
                         tilt_pulse=outputs.tilt_pulse,
+                        manual_roll=manual_roll,
+                        manual_pitch=manual_pitch,
                     )
 
                     if self.preview and (time.monotonic() - self._last_overlay) >= (1 / self.config.control_rate_hz):
@@ -147,5 +157,6 @@ class OpticalPositionStabilizer:
                 pass
             finally:
                 self.gimbal.close()
+                self.manual_input.stop()
                 if cv2 is not None:
                     cv2.destroyAllWindows()

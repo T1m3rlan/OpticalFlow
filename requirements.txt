@@ -3,3 +3,5 @@ opencv-python>=4.8.0.76
 PyYAML>=6.0.1
 picamera[array]>=1.13
 RPi.GPIO>=0.7.1
+Flask>=3.0.0
+inputs>=0.5

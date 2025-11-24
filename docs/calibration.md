@@ -29,3 +29,8 @@ Follow these steps before letting the Betafly stabilizer actuate the payload in 
 1. Disable preview to save CPU on the Pi Zero.
 2. Run the stabilizer for several minutes while applying manual disturbances to the payload.
 3. Confirm the telemetry log has no long saturation periods (outputs pegged at ±0.8). If it does, increase servo travel or retune gains.
+
+### Optional: Manual Stick Trim
+1. Enable the joystick fusion layer in `manual_input.enabled`.
+2. Move each stick to its extremes while watching the telemetry log (`manual_roll`, `manual_pitch`). The values should reach the configured `scale` but return to 0 within the failsafe timeout once released.
+3. Increase `manual_input.deadband` if residual noise causes the setpoint to drift when hands off.

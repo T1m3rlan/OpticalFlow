@@ -26,10 +26,16 @@ The Betafly optical stabilizer is a lightweight vision-and-control stack designe
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-python -m betafly_stabilizer --config config/betafly_default.yaml
+python -m betafly_stabilizer run --config config/betafly_default.yaml --preview
 ```
 
-Add `--preview` to show a debug window (useful when testing on a desktop before deploying to the Pi). Use `--log telemetry.csv` to export raw drift/error samples for later tuning.
+Add `--log telemetry.csv` to export raw drift/error samples for later tuning. Use `--camera-source analog --analog-profile pal_longbow` to switch between composite inputs on the fly.
+
+### Local Web UI
+- Launch the settings GUI: `python -m betafly_stabilizer webui --config config/betafly_default.yaml --host 0.0.0.0 --port 8080`.
+- The dashboard provides quick sliders for camera resolution, PID gains, manual-input scaling, and preview toggles.
+- Use the “Raw YAML editor” link to edit the full configuration without leaving the browser.
+- All edits are validated with PyYAML before being saved back to disk.
 
 ### Deployment Notes
 - Enable camera support on the Pi via `raspi-config` and ensure the GPU memory split is at least 128 MB.
@@ -43,5 +49,17 @@ Add `--preview` to show a debug window (useful when testing on a desktop before 
 - Power the servos from a dedicated 5 V BEC; never from the Pi’s 5 V rail.
 - Tie all grounds together (Pi, servo BEC, any IMUs) to avoid control jitter.
 - Optional debug LED on GPIO 26 to show lock state (add via future actuator hook).
+
+### Analog Camera Profiles
+- `camera.source` controls which backend runs (`opencv`, `picamera`, or `analog`).
+- Define multiple composite capture profiles under `camera.analog_profiles` to switch between PAL/NTSC digitizers or inputs.
+- Select a profile at runtime with `--analog-profile profile_name` or through the web UI.
+- Horizontal/vertical flips are available for upside-down wiring harnesses.
+
+### Manual Stick PosHold
+- Enable the joystick/RC fusion layer with `manual_input.enabled: true` (or `--manual-input` CLI flag).
+- Defaults expect an HID gamepad exposed as `/dev/input/js0`; override with `manual_input.device`.
+- Stick offsets are normalized, filtered with a deadband, and subtracted from the optical error so you can “nudge” the Betafly while it maintains position hold.
+- Telemetry logs now include `manual_roll`/`manual_pitch` columns for backtesting stick authority.
 
 See `docs/architecture.md` for a deeper dive into the modules and data flow, and `docs/calibration.md` for step-by-step tuning guidance.

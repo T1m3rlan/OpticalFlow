@@ -13,6 +13,16 @@ except ImportError:  # pragma: no cover - optional at import time
 
 
 @dataclass
+class AnalogProfile:
+    device: str = "/dev/video0"
+    width: int = 640
+    height: int = 480
+    framerate: int = 30
+    standard: str = "NTSC"
+    input_channel: int = 0
+
+
+@dataclass
 class CameraConfig:
     width: int = 640
     height: int = 480
@@ -20,6 +30,20 @@ class CameraConfig:
     device_index: int = 0
     use_picamera: bool = False
     rotation_deg: int = 0
+    source: str = "opencv"  # opencv | picamera | analog
+    flip_horizontal: bool = False
+    flip_vertical: bool = False
+    analog_profile: str = "default"
+    analog_profiles: Dict[str, AnalogProfile] = field(
+        default_factory=lambda: {"default": AnalogProfile()}
+    )
+
+    def active_analog_profile(self) -> AnalogProfile:
+        if not self.analog_profiles:
+            self.analog_profiles = {"default": AnalogProfile()}
+        return self.analog_profiles.get(self.analog_profile) or next(
+            iter(self.analog_profiles.values())
+        )
 
 
 @dataclass
@@ -57,6 +81,20 @@ class ActuatorConfig:
 
 
 @dataclass
+class ManualInputConfig:
+    enabled: bool = False
+    device: Optional[str] = None
+    mode: str = "gamepad"
+    roll_axis: str = "ABS_X"
+    pitch_axis: str = "ABS_Y"
+    axis_min: int = -32768
+    axis_max: int = 32767
+    deadband: float = 0.05
+    scale: float = 0.4
+    fail_safe_timeout_s: float = 1.5
+
+
+@dataclass
 class StabilizerConfig:
     camera: CameraConfig = field(default_factory=CameraConfig)
     tracker: TrackerConfig = field(default_factory=TrackerConfig)
@@ -67,12 +105,31 @@ class StabilizerConfig:
     control_rate_hz: float = 25.0
     preview: bool = False
     log_path: Optional[str] = None
+    manual_input: ManualInputConfig = field(default_factory=ManualInputConfig)
 
 
 def _to_dataclass(data: Dict[str, Any], cls: Any):
     field_names = {f.name for f in cls.__dataclass_fields__.values()}  # type: ignore[attr-defined]
     filtered = {k: v for k, v in data.items() if k in field_names}
     return cls(**filtered)
+
+
+def _load_camera_config(data: Dict[str, Any]) -> CameraConfig:
+    values = dict(data)
+    analog_profiles_raw = values.pop("analog_profiles", None) or {}
+    camera = _to_dataclass(values, CameraConfig)
+    camera.analog_profiles = {
+        name: _to_dataclass(profile, AnalogProfile) for name, profile in analog_profiles_raw.items()
+    } or {"default": AnalogProfile()}
+    if camera.use_picamera:
+        camera.source = "picamera"
+    return camera
+
+
+def _load_manual_input(data: Dict[str, Any]) -> ManualInputConfig:
+    if not data:
+        return ManualInputConfig()
+    return _to_dataclass(data, ManualInputConfig)
 
 
 def load_config(path: str | Path) -> StabilizerConfig:
@@ -83,7 +140,7 @@ def load_config(path: str | Path) -> StabilizerConfig:
         raw = yaml.safe_load(f) or {}
 
     return StabilizerConfig(
-        camera=_to_dataclass(raw.get("camera", {}), CameraConfig),
+        camera=_load_camera_config(raw.get("camera", {})),
         tracker=_to_dataclass(raw.get("tracker", {}), TrackerConfig),
         pan_pid=_to_dataclass(raw.get("pan_pid", {}), PIDConfig),
         tilt_pid=_to_dataclass(raw.get("tilt_pid", {}), PIDConfig),
@@ -92,4 +149,5 @@ def load_config(path: str | Path) -> StabilizerConfig:
         control_rate_hz=raw.get("control_rate_hz", 25.0),
         preview=raw.get("preview", False),
         log_path=raw.get("log_path"),
+        manual_input=_load_manual_input(raw.get("manual_input", {})),
     )
