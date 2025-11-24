@@ -190,7 +190,7 @@ class CameraOpticalFlow:
         flow_x = np.mean(flow_center[:, :, 0])
         flow_y = np.mean(flow_center[:, :, 1])
         
-        # Scale to match PMW3901 output range
+        # Scale to roughly match legacy Betafly flow units
         scale = 50.0
         flow_x *= scale
         flow_y *= scale
@@ -241,7 +241,7 @@ class CameraOpticalFlow:
         # Update points for next iteration
         self.prev_points = good_new.reshape(-1, 1, 2)
         
-        # Scale to match PMW3901 output range
+        # Scale to roughly match legacy Betafly flow units
         scale = 10.0
         flow_x *= scale
         flow_y *= scale

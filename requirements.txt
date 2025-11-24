@@ -2,9 +2,7 @@
 # Requirements for Raspberry Pi Zero
 
 # Core dependencies
-spidev>=3.5  # For PMW3901
-RPi.GPIO>=0.7.1
-smbus2>=0.4.0  # For Caddx Infra 256 (I2C)
+RPi.GPIO>=0.7.1  # For PWM/SBUS inputs and GPIO helpers
 
 # Camera and computer vision
 opencv-python>=4.5.0  # For camera-based optical flow

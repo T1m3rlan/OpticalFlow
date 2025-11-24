@@ -27,7 +27,7 @@
                     </div>
                     <div class="status-item">
                         <label>Camera Type</label>
-                        <div id="camera-type">PMW3901</div>
+                        <div id="camera-type">CSI Camera</div>
                     </div>
                     <div class="status-item">
                         <label>Surface Quality</label>
@@ -156,40 +156,55 @@
             <div class="card config-card">
                 <h2>Configuration</h2>
                 <div class="config-tabs">
-                    <button class="tab-btn active" onclick="showTab('sensor')">Sensor</button>
-                    <button class="tab-btn" onclick="showTab('pid')">PID Tuning</button>
-                    <button class="tab-btn" onclick="showTab('control')">Control</button>
-                    <button class="tab-btn" onclick="showTab('camera')">Camera</button>
+                    <button class="tab-btn active" onclick="showTab(event, 'camera')">Camera</button>
+                    <button class="tab-btn" onclick="showTab(event, 'pid')">PID Tuning</button>
+                    <button class="tab-btn" onclick="showTab(event, 'control')">Control</button>
                 </div>
 
-                <div id="sensor-tab" class="tab-content active">
+                <div id="camera-tab" class="tab-content active">
                     <div class="form-group">
-                        <label>Sensor Type</label>
+                        <label>Camera Type</label>
                         <select id="camera-type-select" onchange="updateCameraType()">
-                            <option value="pmw3901">PMW3901 Optical Flow Sensor (SPI)</option>
-                            <option value="caddx_infra256">Caddx Infra 256 (I2C)</option>
+                            <option value="csi_camera">Raspberry Pi CSI (IMX219 / OV5647)</option>
                             <option value="usb_camera">USB Camera</option>
-                            <option value="csi_camera">Raspberry Pi Camera (CSI)</option>
-                            <option value="analog_usb">Analog Camera via USB</option>
+                            <option value="analog_usb">Analog Camera via USB Capture</option>
+                            <option value="opencv_any">OpenCV Auto-Detect</option>
                         </select>
-                    </div>
-                    <div class="form-group" id="i2c-address-group" style="display:none;">
-                        <label>I2C Address (decimal)</label>
-                        <input type="number" id="i2c-address" min="1" max="127" value="41">
-                        <small>Default: 41 (0x29 hex)</small>
                     </div>
                     <div class="form-group">
-                        <label>Rotation (degrees)</label>
-                        <select id="sensor-rotation">
-                            <option value="0">0°</option>
-                            <option value="90">90°</option>
-                            <option value="180">180°</option>
-                            <option value="270">270°</option>
+                        <label>Device / Index</label>
+                        <input type="text" id="camera-device" placeholder="auto">
+                        <small>Use camera index (0), /dev/video0, or 'auto'</small>
+                    </div>
+                    <div class="form-group">
+                        <label>Resolution Width</label>
+                        <input type="number" id="camera-width" value="640">
+                    </div>
+                    <div class="form-group">
+                        <label>Resolution Height</label>
+                        <input type="number" id="camera-height" value="480">
+                    </div>
+                    <div class="form-group">
+                        <label>FPS</label>
+                        <input type="number" id="camera-fps" value="30">
+                    </div>
+                    <div class="form-group">
+                        <label>Optical Flow Method</label>
+                        <select id="camera-method">
+                            <option value="farneback">Farneback (default)</option>
+                            <option value="lucas_kanade">Lucas-Kanade</option>
                         </select>
+                    </div>
+                    <div class="form-group" id="deinterlace-group" style="display:none;">
+                        <label>
+                            <input type="checkbox" id="camera-deinterlace" checked>
+                            Enable analog deinterlace filter
+                        </label>
                     </div>
                     <div class="form-group">
                         <label>Scale Factor</label>
                         <input type="number" id="scale-factor" step="0.0001" value="0.001">
+                        <small>Adjust if your height or lens FOV changes</small>
                     </div>
                 </div>
 
@@ -235,25 +250,6 @@
                     <div class="form-group">
                         <label>Velocity Damping (0-1)</label>
                         <input type="number" id="velocity-damping" min="0" max="1" step="0.1" value="0.3">
-                    </div>
-                </div>
-
-                <div id="camera-tab" class="tab-content">
-                    <div class="form-group">
-                        <label>Camera Device</label>
-                        <input type="text" id="camera-device" placeholder="/dev/video0">
-                    </div>
-                    <div class="form-group">
-                        <label>Resolution Width</label>
-                        <input type="number" id="camera-width" value="640">
-                    </div>
-                    <div class="form-group">
-                        <label>Resolution Height</label>
-                        <input type="number" id="camera-height" value="480">
-                    </div>
-                    <div class="form-group">
-                        <label>FPS</label>
-                        <input type="number" id="camera-fps" value="30">
                     </div>
                 </div>
 

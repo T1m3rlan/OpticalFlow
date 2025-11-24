@@ -13,19 +13,11 @@ from typing import Optional
 import json
 from threading import Thread
 
-from optical_flow_sensor import PMW3901, OpticalFlowTracker
+from motion_tracker import OpticalFlowTracker
 from camera_optical_flow import CameraOpticalFlow, AnalogCameraFlow, auto_detect_camera
 from position_stabilizer import StabilizationController, PIDGains
 from stick_input import StickInput, StickMixer, ModeSwitch
 from web_interface import app, system_state, state_lock, start_web_server
-
-# Try to import Caddx Infra 256
-try:
-    from caddx_infra256 import CaddxInfra256
-    CADDX_AVAILABLE = True
-except ImportError:
-    CADDX_AVAILABLE = False
-    logger.warning("Caddx Infra 256 support not available")
 
 logging.basicConfig(
     level=logging.INFO,
@@ -51,50 +43,14 @@ class BetaflyStabilizerAdvanced:
         # Load configuration
         self.config = self._load_config(config_file)
         
-        # Initialize sensor based on type
-        camera_type = self.config.get('sensor', {}).get('type', 'pmw3901')
-        logger.info(f"Initializing sensor: {camera_type}")
+        # Initialize camera input
+        camera_config = self.config.get('camera', {})
+        self.camera_type = camera_config.get('type', 'csi_camera')
+        logger.info(f"Initializing camera: {self.camera_type}")
         
-        if camera_type == 'pmw3901':
-            self.sensor = PMW3901(
-                spi_bus=self.config['sensor']['spi_bus'],
-                spi_device=self.config['sensor']['spi_device'],
-                rotation=self.config['sensor']['rotation']
-            )
-        elif camera_type == 'caddx_infra256':
-            if not CADDX_AVAILABLE:
-                raise RuntimeError("Caddx Infra 256 support not available. Install smbus2: pip install smbus2")
-            
-            self.sensor = CaddxInfra256(
-                bus_number=self.config['sensor'].get('i2c_bus', 1),
-                address=self.config['sensor'].get('i2c_address', 0x29),
-                rotation=self.config['sensor']['rotation']
-            )
-        elif camera_type in ['usb_camera', 'csi_camera', 'opencv_any']:
-            camera_id = self.config.get('camera', {}).get('device', 0)
-            if camera_id == 'auto':
-                camera_id = auto_detect_camera()
-                if camera_id is None:
-                    raise RuntimeError("No camera detected")
-            
-            self.sensor = CameraOpticalFlow(
-                camera_id=camera_id,
-                width=self.config.get('camera', {}).get('width', 640),
-                height=self.config.get('camera', {}).get('height', 480),
-                fps=self.config.get('camera', {}).get('fps', 30),
-                method=self.config.get('camera', {}).get('method', 'farneback')
-            )
+        self.sensor = self._initialize_camera(camera_config)
+        if hasattr(self.sensor, 'start'):
             self.sensor.start()
-        elif camera_type == 'analog_usb':
-            self.sensor = AnalogCameraFlow(
-                device_path=self.config.get('camera', {}).get('device', '/dev/video0'),
-                width=self.config.get('camera', {}).get('width', 720),
-                height=self.config.get('camera', {}).get('height', 480),
-                deinterlace=self.config.get('camera', {}).get('deinterlace', True)
-            )
-            self.sensor.start()
-        else:
-            raise ValueError(f"Unknown camera type: {camera_type}")
         
         # Initialize optical flow tracker
         self.tracker = OpticalFlowTracker(
@@ -149,7 +105,6 @@ class BetaflyStabilizerAdvanced:
         
         # State variables
         self.running = False
-        self.camera_type = camera_type
         
         # Data logging
         self.log_data = self.config['logging']['enabled']
@@ -172,12 +127,6 @@ class BetaflyStabilizerAdvanced:
     def _load_config(self, config_file: Optional[str]) -> dict:
         """Load configuration from file or use defaults"""
         default_config = {
-            'sensor': {
-                'type': 'pmw3901',
-                'spi_bus': 0,
-                'spi_device': 0,
-                'rotation': 0
-            },
             'tracker': {
                 'scale_factor': 0.001,
                 'initial_height': 0.5
@@ -194,7 +143,8 @@ class BetaflyStabilizerAdvanced:
                 'update_rate_hz': 50
             },
             'camera': {
-                'device': 0,
+                'type': 'csi_camera',
+                'device': 'auto',
                 'width': 640,
                 'height': 480,
                 'fps': 30,
@@ -230,6 +180,39 @@ class BetaflyStabilizerAdvanced:
                 logger.warning(f"Could not load config file: {e}. Using defaults.")
         
         return default_config
+    
+    def _initialize_camera(self, camera_config: dict):
+        """Instantiate the requested camera/analog optical flow source"""
+        camera_type = camera_config.get('type', 'csi_camera')
+        width = camera_config.get('width', 640)
+        height = camera_config.get('height', 480)
+        fps = camera_config.get('fps', 30)
+        method = camera_config.get('method', 'farneback')
+        
+        if camera_type in ['csi_camera', 'usb_camera', 'opencv_any']:
+            camera_id = camera_config.get('device', 'auto')
+            if camera_id == 'auto':
+                camera_id = auto_detect_camera()
+                if camera_id is None:
+                    raise RuntimeError("No camera detected. Set camera.device in config.")
+                logger.info(f"Auto-detected camera at index {camera_id}")
+            return CameraOpticalFlow(
+                camera_id=camera_id,
+                width=width,
+                height=height,
+                fps=fps,
+                method=method
+            )
+        elif camera_type == 'analog_usb':
+            device_path = camera_config.get('device', '/dev/video0')
+            return AnalogCameraFlow(
+                device_path=device_path,
+                width=camera_config.get('width', 720),
+                height=camera_config.get('height', 480),
+                deinterlace=camera_config.get('deinterlace', True)
+            )
+        else:
+            raise ValueError(f"Unknown camera type: {camera_type}")
     
     def _deep_update(self, base_dict, update_dict):
         """Recursively update nested dictionaries"""

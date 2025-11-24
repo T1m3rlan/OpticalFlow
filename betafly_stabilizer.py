@@ -3,7 +3,7 @@
 Betafly Optical Position Stabilization System
 Main control script for Raspberry Pi Zero
 
-This script integrates optical flow sensing with position stabilization
+This script integrates camera-based optical flow with position stabilization
 to provide autonomous position hold capabilities for the Betafly drone.
 """
 
@@ -15,10 +15,15 @@ import logging
 from typing import Optional
 import json
 
-from optical_flow_sensor import PMW3901, OpticalFlowTracker
+from motion_tracker import OpticalFlowTracker
 from position_stabilizer import (
     StabilizationController, 
     PIDGains
+)
+from camera_optical_flow import (
+    CameraOpticalFlow,
+    AnalogCameraFlow,
+    auto_detect_camera
 )
 
 # Configure logging
@@ -44,13 +49,11 @@ class BetaflyStabilizer:
         # Load configuration
         self.config = self._load_config(config_file)
         
-        # Initialize optical flow sensor
-        logger.info("Initializing optical flow sensor...")
-        self.sensor = PMW3901(
-            spi_bus=self.config['sensor']['spi_bus'],
-            spi_device=self.config['sensor']['spi_device'],
-            rotation=self.config['sensor']['rotation']
-        )
+        # Initialize camera-based optical flow
+        logger.info("Initializing camera-based optical flow...")
+        self.sensor = self._initialize_camera(self.config.get('camera', {}))
+        if hasattr(self.sensor, 'start'):
+            self.sensor.start()
         
         # Initialize optical flow tracker
         self.tracker = OpticalFlowTracker(
@@ -93,10 +96,14 @@ class BetaflyStabilizer:
     def _load_config(self, config_file: Optional[str]) -> dict:
         """Load configuration from file or use defaults"""
         default_config = {
-            'sensor': {
-                'spi_bus': 0,
-                'spi_device': 0,
-                'rotation': 0
+            'camera': {
+                'type': 'csi_camera',
+                'device': 'auto',
+                'width': 640,
+                'height': 480,
+                'fps': 30,
+                'method': 'farneback',
+                'deinterlace': True
             },
             'tracker': {
                 'scale_factor': 0.001,
@@ -144,6 +151,41 @@ class BetaflyStabilizer:
         
         return default_config
     
+    def _initialize_camera(self, camera_config: dict):
+        """Create the appropriate camera optical flow source"""
+        camera_type = camera_config.get('type', 'csi_camera')
+        width = camera_config.get('width', 640)
+        height = camera_config.get('height', 480)
+        fps = camera_config.get('fps', 30)
+        method = camera_config.get('method', 'farneback')
+        
+        logger.info(f"Selected camera type: {camera_type}")
+        
+        if camera_type in ['csi_camera', 'usb_camera', 'opencv_any']:
+            camera_id = camera_config.get('device', 'auto')
+            if camera_id == 'auto':
+                camera_id = auto_detect_camera()
+                if camera_id is None:
+                    raise RuntimeError("No camera detected. Set camera.device in config.")
+                logger.info(f"Auto-detected camera at index {camera_id}")
+            return CameraOpticalFlow(
+                camera_id=camera_id,
+                width=width,
+                height=height,
+                fps=fps,
+                method=method
+            )
+        elif camera_type == 'analog_usb':
+            device_path = camera_config.get('device', '/dev/video0')
+            return AnalogCameraFlow(
+                device_path=device_path,
+                width=camera_config.get('width', 720),
+                height=camera_config.get('height', 480),
+                deinterlace=camera_config.get('deinterlace', True)
+            )
+        else:
+            raise ValueError(f"Unknown camera type: {camera_type}")
+    
     def start(self):
         """Start the stabilization system"""
         logger.info("Starting Betafly stabilization system")
@@ -165,7 +207,8 @@ class BetaflyStabilizer:
         self.running = False
         
         # Shutdown sensor
-        self.sensor.shutdown()
+        if hasattr(self.sensor, 'stop'):
+            self.sensor.stop()
         
         # Close log file
         if self.log_file:

@@ -59,11 +59,18 @@ async function loadConfig() {
 
 // Update UI with config values
 function updateConfigUI() {
-    // Sensor tab
-    if (config.sensor) {
-        document.getElementById('sensor-rotation').value = config.sensor.rotation || 0;
-        document.getElementById('scale-factor').value = config.tracker?.scale_factor || 0.001;
+    // Camera tab
+    if (config.camera) {
+        document.getElementById('camera-type-select').value = config.camera.type || 'csi_camera';
+        document.getElementById('camera-device').value = config.camera.device || 'auto';
+        document.getElementById('camera-width').value = config.camera.width || 640;
+        document.getElementById('camera-height').value = config.camera.height || 480;
+        document.getElementById('camera-fps').value = config.camera.fps || 30;
+        document.getElementById('camera-method').value = config.camera.method || 'farneback';
+        document.getElementById('camera-deinterlace').checked = config.camera.deinterlace !== false;
+        updateCameraType();
     }
+    document.getElementById('scale-factor').value = config.tracker?.scale_factor || 0.001;
     
     // PID tab
     if (config.pid) {
@@ -84,25 +91,18 @@ function updateConfigUI() {
         document.getElementById('velocity-damping').value = config.stabilizer.velocity_damping || 0.3;
     }
     
-    // Camera tab
-    if (config.camera) {
-        document.getElementById('camera-device').value = config.camera.device || '/dev/video0';
-        document.getElementById('camera-width').value = config.camera.width || 640;
-        document.getElementById('camera-height').value = config.camera.height || 480;
-        document.getElementById('camera-fps').value = config.camera.fps || 30;
+    // Tracker height slider/input
+    if (config.tracker) {
+        document.getElementById('height-input').value = config.tracker.initial_height || 0.5;
+        document.getElementById('height-slider').value = config.tracker.initial_height || 0.5;
     }
 }
 
 // Save configuration
 async function saveConfig() {
     // Build config object from UI
+    const cameraType = document.getElementById('camera-type-select').value;
     const newConfig = {
-        sensor: {
-            spi_bus: config.sensor?.spi_bus || 0,
-            spi_device: config.sensor?.spi_device || 0,
-            rotation: parseInt(document.getElementById('sensor-rotation').value),
-            type: document.getElementById('camera-type-select').value
-        },
         tracker: {
             scale_factor: parseFloat(document.getElementById('scale-factor').value),
             initial_height: parseFloat(document.getElementById('height-input').value)
@@ -127,10 +127,13 @@ async function saveConfig() {
             update_rate_hz: parseInt(document.getElementById('update-rate').value)
         },
         camera: {
-            device: document.getElementById('camera-device').value,
+            type: cameraType,
+            device: document.getElementById('camera-device').value || 'auto',
             width: parseInt(document.getElementById('camera-width').value),
             height: parseInt(document.getElementById('camera-height').value),
-            fps: parseInt(document.getElementById('camera-fps').value)
+            fps: parseInt(document.getElementById('camera-fps').value),
+            method: document.getElementById('camera-method').value,
+            deinterlace: document.getElementById('camera-deinterlace').checked
         },
         logging: config.logging || { enabled: false, file: 'flight_log.csv' },
         output: config.output || { interface: 'mavlink', port: '/dev/ttyAMA0', baudrate: 115200 }
@@ -163,7 +166,8 @@ async function updateStatus() {
         modeBadge.className = 'mode-badge ' + state.mode;
         
         // Update camera type
-        document.getElementById('camera-type').textContent = state.camera_type.toUpperCase();
+        const prettyCamera = state.camera_type.replace('_', ' ').toUpperCase();
+        document.getElementById('camera-type').textContent = prettyCamera;
         
         // Update surface quality
         const quality = state.surface_quality;
@@ -291,7 +295,7 @@ async function setHeight(value) {
 }
 
 // Tab management
-function showTab(tabName) {
+function showTab(evt, tabName) {
     // Hide all tabs
     document.querySelectorAll('.tab-content').forEach(tab => {
         tab.classList.remove('active');
@@ -306,27 +310,14 @@ function showTab(tabName) {
     document.getElementById(tabName + '-tab').classList.add('active');
     
     // Mark button as active
-    event.target.classList.add('active');
+    if (evt) {
+        evt.target.classList.add('active');
+    }
 }
 
 // Camera type update
 function updateCameraType() {
     const cameraType = document.getElementById('camera-type-select').value;
-    console.log('Camera type changed to:', cameraType);
-    
-    // Show/hide I2C address field for Caddx
-    const i2cGroup = document.getElementById('i2c-address-group');
-    if (cameraType === 'caddx_infra256') {
-        i2cGroup.style.display = 'block';
-    } else {
-        i2cGroup.style.display = 'none';
-    }
-    
-    // Show/hide camera settings based on type
-    const cameraTab = document.getElementById('camera-tab');
-    if (cameraType === 'pmw3901' || cameraType === 'caddx_infra256') {
-        cameraTab.style.display = 'none';
-    } else {
-        cameraTab.style.display = 'block';
-    }
+    const deinterlaceGroup = document.getElementById('deinterlace-group');
+    deinterlaceGroup.style.display = (cameraType === 'analog_usb') ? 'block' : 'none';
 }

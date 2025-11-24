@@ -3,6 +3,7 @@
 # Run this script on your Raspberry Pi Zero
 
 set -e
+REBOOT_REQUIRED=0
 
 echo "================================================"
 echo "Betafly Stabilization System - Setup Script"
@@ -33,14 +34,16 @@ sudo apt-get install -y \
     python3-setuptools \
     git
 
-# Enable SPI
-echo "[3/6] Enabling SPI interface..."
-if ! grep -q "^dtparam=spi=on" /boot/config.txt; then
-    echo "dtparam=spi=on" | sudo tee -a /boot/config.txt
-    echo "SPI enabled (reboot required)"
+# Enable camera interface (if raspi-config is available)
+echo "[3/6] Enabling Raspberry Pi camera interface..."
+if command -v raspi-config >/dev/null 2>&1; then
+    sudo raspi-config nonint do_camera 0 || true
+    sudo raspi-config nonint set_config_var start_x 1 /boot/config.txt || true
+    sudo raspi-config nonint set_config_var gpu_mem 128 /boot/config.txt || true
+    echo "Camera interface enabled (reboot required)"
     REBOOT_REQUIRED=1
 else
-    echo "SPI already enabled"
+    echo "raspi-config not found. Please enable the camera interface manually."
 fi
 
 # Install Python dependencies
@@ -54,8 +57,8 @@ chmod +x betafly_stabilizer.py
 
 # Test installation
 echo "[6/6] Testing installation..."
-python3 -c "import spidev; print('✓ spidev installed')"
-python3 -c "from optical_flow_sensor import PMW3901; print('✓ optical_flow_sensor OK')"
+python3 -c "import cv2; print('✓ OpenCV installed')"
+python3 -c "from camera_optical_flow import CameraOpticalFlow; print('✓ camera_optical_flow OK')"
 python3 -c "from position_stabilizer import StabilizationController; print('✓ position_stabilizer OK')"
 
 echo ""
@@ -65,7 +68,7 @@ echo "================================================"
 echo ""
 
 if [ "$REBOOT_REQUIRED" = "1" ]; then
-    echo "⚠️  REBOOT REQUIRED to enable SPI interface"
+    echo "⚠️  REBOOT REQUIRED to enable the camera interface"
     echo ""
     read -p "Reboot now? (y/n) " -n 1 -r
     echo

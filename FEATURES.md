@@ -32,10 +32,9 @@ The Betafly system now includes a beautiful web-based GUI for real-time monitori
 - Real-time control output visualization
 
 #### 3. **Configuration Editor**
-- **Sensor Tab**: Select sensor type, rotation, scale factor
+- **Camera Tab**: Select camera type (CSI/USB/analog), device path, resolution, optical flow method, and scale factor
 - **PID Tuning Tab**: Adjust PID gains for both axes
 - **Control Tab**: Update rate, max tilt, velocity damping
-- **Camera Tab**: Configure camera settings (resolution, FPS, device)
 
 #### 4. **Manual Stick Inputs Display**
 - Real-time RC stick position visualization
@@ -64,45 +63,22 @@ hostname -I
 
 ---
 
-## Analog Camera Support
+## Camera Input Options
 
-### Overview
-Now supports multiple camera types for optical flow:
-- **PMW3901**: Dedicated optical flow sensor (SPI) - Original
-- **Caddx Infra 256**: Infrared optical flow sensor (I2C) - **NEW!**
-- **USB Cameras**: Standard webcams
-- **CSI Cameras**: Raspberry Pi Camera Module
-- **Analog Cameras**: FPV cameras via USB capture cards
+### Supported camera transports
+- **CSI cameras** – Raspberry Pi Camera Module v1 (OV5647) & v2 (IMX219)
+- **USB webcams** – Any UVC-compliant webcam
+- **Analog FPV cameras** – Via UVC capture sticks
+- **OpenCV auto-detect** – Scans `/dev/video*` for the first working device
 
-### Why Use Analog Cameras?
-- Already have FPV camera on drone
-- No additional sensor needed
-- Works with existing camera setup
-- Better for daylight outdoor flying
+All camera types share the same `camera` block inside `config.json`:
 
-### Setup for Analog Camera
-
-#### 1. Hardware Connection
-```
-Analog FPV Camera -> USB Video Capture Card -> Raspberry Pi USB Port
-```
-
-Recommended capture cards:
-- EasyCap DC60
-- Elgato Cam Link 4K (high quality)
-- Generic USB video capture dongles
-
-#### 2. Software Configuration
-
-Edit `config.json`:
 ```json
 {
-  "sensor": {
-    "type": "analog_usb"
-  },
   "camera": {
-    "device": "/dev/video0",
-    "width": 720,
+    "type": "csi_camera",
+    "device": "auto",
+    "width": 640,
     "height": 480,
     "fps": 30,
     "method": "farneback",
@@ -111,100 +87,42 @@ Edit `config.json`:
 }
 ```
 
-#### 3. Test Camera
+#### CSI Cameras (IMX219 / OV5647)
+- Set `"camera.type": "csi_camera"` and `"device": "auto"`.
+- Enable the camera interface via `sudo raspi-config`.
+- Use `libcamera-hello -t 3000` to confirm the stream.
+
+#### USB Webcams
+- Set `"camera.type": "usb_camera"`.
+- Assign `"device": 0` or `/dev/video1` depending on your system.
+- Works best with Farneback flow at 640×480; drop to 320×240 for Pi Zero.
+
+#### Analog FPV Cameras
+```
+Analog Camera -> UVC Capture Stick -> Pi Zero USB OTG port
+```
+- Set `"camera.type": "analog_usb"` and `"device": "/dev/video0"`.
+- Keep `"deinterlace": true` to clean up interlaced NTSC/PAL feeds.
+- Recommended capture dongles: EasyCAP DC60, Elgato CamLink, generic UVC sticks.
+
+#### OpenCV Auto-Detect
+- Set `"camera.type": "opencv_any"` and `"device": "auto"`.
+- The system will probe `/dev/video0-4` until it finds a working feed.
+
+### Testing a Camera
 
 ```bash
-# List available video devices
+# List video devices
 ls /dev/video*
 
-# Test camera capture
-python3 -c "
+# Smoke-test with OpenCV
+python3 - <<'EOF'
 import cv2
 cap = cv2.VideoCapture(0)
-ret, frame = cap.read()
-print(f'Camera works: {ret}, Resolution: {frame.shape}')
+ok, frame = cap.read()
+print("Camera OK:", ok, "Shape:", frame.shape if ok else None)
 cap.release()
-"
-```
-
-### Camera Types Configuration
-
-#### Caddx Infra 256 (I2C Infrared Sensor)
-```json
-{
-  "sensor": {
-    "type": "caddx_infra256"
-  },
-  "sensor": {
-    "i2c_bus": 1,
-    "i2c_address": 41,
-    "rotation": 0
-  }
-}
-```
-
-**Advantages:**
-- Infrared technology (better in various lighting)
-- Simple I2C wiring (4 wires vs 6 for SPI)
-- Lower power consumption
-- Excellent for indoor/outdoor use
-
-**Setup:**
-1. Enable I2C: `sudo raspi-config` -> Interface Options -> I2C
-2. Wire to Pi: VCC(3.3V), GND, SDA(Pin 3), SCL(Pin 5)
-3. Test: `sudo i2cdetect -y 1` (should show 0x29)
-4. Run: `python3 caddx_infra256.py` to test
-
-See **[CADDX_INFRA256_GUIDE.md](CADDX_INFRA256_GUIDE.md)** for complete setup guide.
-
-#### USB Camera (Webcam)
-```json
-{
-  "sensor": {
-    "type": "usb_camera"
-  },
-  "camera": {
-    "device": 0,  // or "/dev/video0"
-    "width": 640,
-    "height": 480,
-    "method": "farneback"
-  }
-}
-```
-
-#### Raspberry Pi Camera (CSI)
-```bash
-# Enable camera interface first
-sudo raspi-config
-# Interface Options -> Camera -> Enable
-```
-
-```json
-{
-  "sensor": {
-    "type": "csi_camera"
-  },
-  "camera": {
-    "device": 0,
-    "width": 640,
-    "height": 480
-  }
-}
-```
-
-#### Analog Camera via USB
-```json
-{
-  "sensor": {
-    "type": "analog_usb"
-  },
-  "camera": {
-    "device": "/dev/video0",
-    "width": 720,
-    "height": 480,
-    "deinterlace": true
-  }
-}
+EOF
 ```
 
 ### Optical Flow Methods
@@ -234,9 +152,9 @@ Two methods available:
 ### Performance Tips
 
 **For Raspberry Pi Zero:**
-- Use 320x240 resolution
-- Use Lucas-Kanade method
-- Reduce update rate to 30Hz
+- Use 320×240 resolution
+- Prefer `lucas_kanade` method for lighter CPU usage
+- Reduce control update rate to 30 Hz
 
 ```json
 {
@@ -252,10 +170,9 @@ Two methods available:
 }
 ```
 
-**For Raspberry Pi Zero 2W or Pi 4:**
-- Can use 640x480 resolution
-- Farneback method works well
-- 50Hz update rate
+**For Raspberry Pi Zero 2 W / Pi 4:**
+- 640×480 with Farneback at 50 Hz works well
+- Leave `fps` at 30 for thermal headroom
 
 ---
 
@@ -418,7 +335,7 @@ If RC signal lost for >1 second:
 ```bash
 # Edit config
 nano config.json
-# Change sensor.type to "usb_camera"
+# Set camera.type = "usb_camera" and camera.device = 0
 
 # Start system
 ./betafly_stabilizer_advanced.py --config config.json
@@ -491,13 +408,12 @@ sudo cat /dev/ttyAMA0  # Should see garbage if SBUS working
 
 ## Performance Comparison
 
-| Feature | Pi Zero | Pi Zero 2W | Pi 4 |
-|---------|---------|------------|------|
-| PMW3901 | 50Hz ✓ | 100Hz ✓ | 100Hz ✓ |
-| Caddx Infra 256 | 50Hz ✓ | 100Hz ✓ | 100Hz ✓ |
-| USB Camera 320x240 | 30Hz ✓ | 50Hz ✓ | 100Hz ✓ |
-| USB Camera 640x480 | 15Hz ⚠️ | 30Hz ✓ | 60Hz ✓ |
-| Analog 720x480 | 10Hz ⚠️ | 30Hz ✓ | 50Hz ✓ |
+| Feature | Pi Zero | Pi Zero 2 W | Pi 4 |
+|---------|---------|-------------|------|
+| CSI 320×240 (Lucas-Kanade) | 40 Hz ✓ | 80 Hz ✓ | 100 Hz ✓ |
+| CSI 640×480 (Farneback) | 20 Hz ⚠️ | 50 Hz ✓ | 100 Hz ✓ |
+| USB 320×240 | 30 Hz ✓ | 60 Hz ✓ | 100 Hz ✓ |
+| Analog 720×480 | 12 Hz ⚠️ | 35 Hz ✓ | 60 Hz ✓ |
 | Web Interface | ✓ | ✓ | ✓ |
 | SBUS Input | ✓ | ✓ | ✓ |
 
@@ -511,8 +427,9 @@ sudo cat /dev/ttyAMA0  # Should see garbage if SBUS working
 ### Configuration 1: High Performance (Pi 4)
 ```json
 {
-  "sensor": {"type": "usb_camera"},
   "camera": {
+    "type": "usb_camera",
+    "device": "/dev/video0",
     "width": 640,
     "height": 480,
     "fps": 60,
@@ -526,41 +443,31 @@ sudo cat /dev/ttyAMA0  # Should see garbage if SBUS working
 ### Configuration 2: Lightweight (Pi Zero)
 ```json
 {
-  "sensor": {"type": "pmw3901"},
-  "control": {"update_rate_hz": 50},
-  "stick_input": {"enabled": true, "protocol": "sbus"},
+  "camera": {
+    "type": "csi_camera",
+    "device": "auto",
+    "width": 320,
+    "height": 240,
+    "fps": 30,
+    "method": "lucas_kanade"
+  },
+  "control": {"update_rate_hz": 30},
   "web_interface": {"enabled": true}
 }
 ```
 
-### Configuration 4: Caddx Infra 256 (Recommended for Production)
+### Configuration 3: Analog FPV Camera
 ```json
 {
-  "sensor": {
-    "type": "caddx_infra256",
-    "i2c_address": 41,
-    "rotation": 0
-  },
-  "tracker": {
-    "scale_factor": 0.001,
-    "initial_height": 0.8
-  },
-  "control": {"update_rate_hz": 50},
-  "stick_input": {"enabled": true, "protocol": "sbus"}
-}
-```
-
-### Configuration 3: Camera Only (No PMW3901)
-```json
-{
-  "sensor": {"type": "analog_usb"},
   "camera": {
+    "type": "analog_usb",
     "device": "/dev/video0",
-    "width": 320,
-    "height": 240,
-    "method": "lucas_kanade",
+    "width": 640,
+    "height": 480,
+    "fps": 30,
+    "method": "farneback",
     "deinterlace": true
   },
-  "control": {"update_rate_hz": 30}
+  "tracker": {"initial_height": 0.7}
 }
 ```
