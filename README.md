@@ -2,9 +2,17 @@
 
 A complete optical flow-based position stabilization system for the Betafly drone, optimized for Raspberry Pi Zero.
 
-## Features
+## ✨ New Features
 
-- **Optical Flow Sensing**: Uses PMW3901 optical flow sensor for precise motion tracking
+- **🌐 Web Interface**: Beautiful real-time dashboard for monitoring and configuration (port 8080)
+- **📷 Multiple Camera Support**: PMW3901, USB cameras, CSI cameras, and analog FPV cameras
+- **🎮 Manual Stick Inputs**: RC receiver integration with SBUS/PWM support and smooth blending
+- **🔧 Live Configuration**: Edit PID gains and settings through web GUI
+- **📊 Real-time Visualization**: Live position tracking and control output graphs
+
+## Core Features
+
+- **Optical Flow Sensing**: Multiple sensor options for precise motion tracking
 - **Position Hold**: Maintains GPS-free position hold using visual odometry
 - **Velocity Damping**: Reduces drift and oscillations during flight
 - **PID Control**: Tunable PID controllers for X and Y axis stabilization
@@ -110,20 +118,55 @@ Edit `config.json` to customize the system for your setup:
 
 ## Usage
 
-### Basic Usage
+### Quick Start with Web Interface
+
+```bash
+# Start advanced system with web interface (recommended)
+./betafly_stabilizer_advanced.py
+
+# Access web interface at:
+# http://raspberrypi.local:8080
+```
+
+The web interface provides:
+- Real-time position and velocity display
+- Live control output visualization
+- Configuration editor
+- Mode switching controls
+- Stick input monitoring
+
+### Basic Command Line Usage
 
 ```bash
 # Start with velocity damping (reduces drift)
 ./betafly_stabilizer.py --mode velocity_damping
 
-# Start with position hold
-./betafly_stabilizer.py --mode position_hold
+# Start advanced system with all features
+./betafly_stabilizer_advanced.py --mode position_hold
 
 # Use custom config file
-./betafly_stabilizer.py --config my_config.json
+./betafly_stabilizer_advanced.py --config my_config.json
 
 # Enable data logging
-./betafly_stabilizer.py --log --mode position_hold
+./betafly_stabilizer_advanced.py --log --mode position_hold
+
+# Disable web interface
+./betafly_stabilizer_advanced.py --no-web
+```
+
+### Using Different Camera Types
+
+```bash
+# PMW3901 sensor (default)
+./betafly_stabilizer_advanced.py
+
+# USB camera
+# Edit config.json: "sensor": {"type": "usb_camera"}
+./betafly_stabilizer_advanced.py --config config.json
+
+# Analog camera via USB capture card
+# Edit config.json: "sensor": {"type": "analog_usb"}
+./betafly_stabilizer_advanced.py --config config.json
 ```
 
 ### Command Line Options
@@ -324,6 +367,41 @@ pitch, roll = controller.update(x, y, vx, vy)  # Update control
 controller.hold_current_position(x, y)  # Hold at position
 ```
 
+## New Features Documentation
+
+For detailed information about new features:
+- **[FEATURES.md](FEATURES.md)** - Complete guide to web interface, camera support, and stick inputs
+- **[INSTALL.md](INSTALL.md)** - Installation and setup instructions
+
+## Project Files
+
+### Core System
+- `betafly_stabilizer.py` - Original basic control script
+- `betafly_stabilizer_advanced.py` - **New!** Advanced system with all features
+- `optical_flow_sensor.py` - PMW3901 sensor interface
+- `camera_optical_flow.py` - **New!** Camera-based optical flow (USB/CSI/Analog)
+- `position_stabilizer.py` - PID control and stabilization algorithms
+- `stick_input.py` - **New!** RC receiver input handling (SBUS/PWM)
+- `web_interface.py` - **New!** Flask web server and API
+
+### Web Interface
+- `templates/index.html` - Web dashboard UI
+- `static/css/style.css` - Styling
+- `static/js/app.js` - Frontend JavaScript
+
+### Configuration & Setup
+- `config.json` - **Updated!** Configuration file with camera and stick input options
+- `setup.sh` - Automated setup script
+- `requirements.txt` - **Updated!** Python dependencies (includes OpenCV, Flask)
+
+### Testing & Utilities
+- `test_sensor.py` - Sensor testing utility
+
+### Documentation
+- `README.md` - This file
+- `FEATURES.md` - **New!** Detailed guide for new features
+- `INSTALL.md` - Installation guide
+
 ## Contributing
 
 Contributions welcome! Areas for improvement:
@@ -332,6 +410,8 @@ Contributions welcome! Areas for improvement:
 - Kalman filter for sensor fusion
 - Auto-tuning algorithms
 - Ground effect compensation
+- Additional web interface features
+- Mobile app development
 
 ## License
 

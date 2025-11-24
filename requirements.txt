@@ -5,9 +5,17 @@
 spidev>=3.5
 RPi.GPIO>=0.7.1
 
+# Camera and computer vision
+opencv-python>=4.5.0  # For camera-based optical flow
+opencv-contrib-python>=4.5.0  # Additional CV algorithms
+
+# Web interface
+Flask>=2.0.0       # Web server framework
+Flask-CORS>=3.0.0  # Cross-origin resource sharing
+
 # Optional dependencies for flight controller communication
 pymavlink>=2.4.37  # For MAVLink protocol
-pyserial>=3.5      # For serial communication
+pyserial>=3.5      # For serial communication (SBUS/MSP)
 
 # Data processing and utilities
 numpy>=1.21.0      # For advanced math operations

@@ -1,9 +1,10 @@
 {
   "sensor": {
+    "type": "pmw3901",
     "spi_bus": 0,
     "spi_device": 0,
     "rotation": 0,
-    "comment": "Rotation: 0, 90, 180, or 270 degrees based on sensor mounting"
+    "comment": "type: pmw3901, usb_camera, csi_camera, analog_usb, opencv_any"
   },
   "tracker": {
     "scale_factor": 0.001,
@@ -38,10 +39,34 @@
     "file": "flight_log.csv",
     "comment": "Enable data logging for analysis"
   },
+  "camera": {
+    "device": 0,
+    "width": 640,
+    "height": 480,
+    "fps": 30,
+    "method": "farneback",
+    "deinterlace": true,
+    "comment": "For USB/CSI/Analog cameras. device: 0 or /dev/video0, method: farneback or lucas_kanade"
+  },
+  "stick_input": {
+    "enabled": false,
+    "protocol": "mock",
+    "device": "/dev/ttyAMA0",
+    "channels": 8,
+    "mix_ratio": 0.5,
+    "mode_channel": 4,
+    "comment": "protocol: sbus, ppm, pwm, mock. mix_ratio: 0.0=full stab, 1.0=full manual"
+  },
   "output": {
     "interface": "mavlink",
     "port": "/dev/ttyAMA0",
     "baudrate": 115200,
     "comment": "Flight controller interface: mavlink, msp, or pwm"
+  },
+  "web_interface": {
+    "enabled": true,
+    "host": "0.0.0.0",
+    "port": 8080,
+    "comment": "Web GUI for configuration and monitoring"
   }
 }

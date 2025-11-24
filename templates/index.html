@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Betafly Stabilization Control</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🚁 Betafly Position Stabilization</h1>
+            <div class="status-bar">
+                <span class="status-indicator" id="connection-status">●</span>
+                <span id="connection-text">Connecting...</span>
+            </div>
+        </header>
+
+        <div class="main-grid">
+            <!-- Real-time Status -->
+            <div class="card status-card">
+                <h2>System Status</h2>
+                <div class="status-grid">
+                    <div class="status-item">
+                        <label>Mode</label>
+                        <div class="mode-badge" id="mode-badge">OFF</div>
+                    </div>
+                    <div class="status-item">
+                        <label>Camera Type</label>
+                        <div id="camera-type">PMW3901</div>
+                    </div>
+                    <div class="status-item">
+                        <label>Surface Quality</label>
+                        <div class="quality-bar">
+                            <div class="quality-fill" id="quality-fill"></div>
+                            <span id="quality-value">0</span>
+                        </div>
+                    </div>
+                    <div class="status-item">
+                        <label>Height</label>
+                        <div id="height-display">0.50 m</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Position Display -->
+            <div class="card position-card">
+                <h2>Position & Velocity</h2>
+                <div class="position-display">
+                    <div class="position-2d" id="position-2d">
+                        <div class="crosshair"></div>
+                        <div class="drone-indicator" id="drone-position"></div>
+                    </div>
+                    <div class="position-values">
+                        <div class="value-row">
+                            <span class="label">X:</span>
+                            <span class="value" id="pos-x">0.000 m</span>
+                        </div>
+                        <div class="value-row">
+                            <span class="label">Y:</span>
+                            <span class="value" id="pos-y">0.000 m</span>
+                        </div>
+                        <div class="value-row">
+                            <span class="label">Vel X:</span>
+                            <span class="value" id="vel-x">0.000 m/s</span>
+                        </div>
+                        <div class="value-row">
+                            <span class="label">Vel Y:</span>
+                            <span class="value" id="vel-y">0.000 m/s</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Control Commands -->
+            <div class="card control-card">
+                <h2>Control</h2>
+                <div class="control-buttons">
+                    <button class="btn btn-primary" onclick="setMode('velocity_damping')">
+                        Velocity Damping
+                    </button>
+                    <button class="btn btn-success" onclick="setMode('position_hold')">
+                        Position Hold
+                    </button>
+                    <button class="btn btn-warning" onclick="setMode('off')">
+                        Disable
+                    </button>
+                    <button class="btn btn-info" onclick="resetPosition()">
+                        Reset Position
+                    </button>
+                </div>
+                
+                <div class="height-control">
+                    <label>Height (m)</label>
+                    <input type="range" id="height-slider" min="0.1" max="3.0" step="0.1" value="0.5" oninput="updateHeightSlider(this.value)">
+                    <input type="number" id="height-input" min="0.1" max="3.0" step="0.1" value="0.5" onchange="setHeight(this.value)">
+                </div>
+
+                <div class="corrections-display">
+                    <h3>Control Outputs</h3>
+                    <div class="correction-bars">
+                        <div class="correction-item">
+                            <label>Pitch:</label>
+                            <div class="bar-container">
+                                <div class="bar-fill pitch-bar" id="pitch-bar"></div>
+                            </div>
+                            <span id="pitch-value">0.0°</span>
+                        </div>
+                        <div class="correction-item">
+                            <label>Roll:</label>
+                            <div class="bar-container">
+                                <div class="bar-fill roll-bar" id="roll-bar"></div>
+                            </div>
+                            <span id="roll-value">0.0°</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Manual Stick Inputs -->
+            <div class="card stick-card">
+                <h2>Manual Stick Inputs</h2>
+                <div class="stick-display">
+                    <div class="stick-item">
+                        <label>Pitch</label>
+                        <div class="stick-bar">
+                            <div class="stick-fill" id="stick-pitch"></div>
+                        </div>
+                        <span id="stick-pitch-value">0</span>
+                    </div>
+                    <div class="stick-item">
+                        <label>Roll</label>
+                        <div class="stick-bar">
+                            <div class="stick-fill" id="stick-roll"></div>
+                        </div>
+                        <span id="stick-roll-value">0</span>
+                    </div>
+                    <div class="stick-item">
+                        <label>Throttle</label>
+                        <div class="stick-bar">
+                            <div class="stick-fill" id="stick-throttle"></div>
+                        </div>
+                        <span id="stick-throttle-value">0</span>
+                    </div>
+                    <div class="stick-item">
+                        <label>Yaw</label>
+                        <div class="stick-bar">
+                            <div class="stick-fill" id="stick-yaw"></div>
+                        </div>
+                        <span id="stick-yaw-value">0</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Configuration -->
+            <div class="card config-card">
+                <h2>Configuration</h2>
+                <div class="config-tabs">
+                    <button class="tab-btn active" onclick="showTab('sensor')">Sensor</button>
+                    <button class="tab-btn" onclick="showTab('pid')">PID Tuning</button>
+                    <button class="tab-btn" onclick="showTab('control')">Control</button>
+                    <button class="tab-btn" onclick="showTab('camera')">Camera</button>
+                </div>
+
+                <div id="sensor-tab" class="tab-content active">
+                    <div class="form-group">
+                        <label>Sensor Type</label>
+                        <select id="camera-type-select" onchange="updateCameraType()">
+                            <option value="pmw3901">PMW3901 Optical Flow Sensor</option>
+                            <option value="usb_camera">USB Camera</option>
+                            <option value="csi_camera">Raspberry Pi Camera (CSI)</option>
+                            <option value="analog_usb">Analog Camera via USB</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Rotation (degrees)</label>
+                        <select id="sensor-rotation">
+                            <option value="0">0°</option>
+                            <option value="90">90°</option>
+                            <option value="180">180°</option>
+                            <option value="270">270°</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Scale Factor</label>
+                        <input type="number" id="scale-factor" step="0.0001" value="0.001">
+                    </div>
+                </div>
+
+                <div id="pid-tab" class="tab-content">
+                    <h3>X-Axis PID</h3>
+                    <div class="form-group">
+                        <label>Kp</label>
+                        <input type="number" id="pid-x-kp" step="0.1" value="0.5">
+                    </div>
+                    <div class="form-group">
+                        <label>Ki</label>
+                        <input type="number" id="pid-x-ki" step="0.01" value="0.1">
+                    </div>
+                    <div class="form-group">
+                        <label>Kd</label>
+                        <input type="number" id="pid-x-kd" step="0.1" value="0.2">
+                    </div>
+
+                    <h3>Y-Axis PID</h3>
+                    <div class="form-group">
+                        <label>Kp</label>
+                        <input type="number" id="pid-y-kp" step="0.1" value="0.5">
+                    </div>
+                    <div class="form-group">
+                        <label>Ki</label>
+                        <input type="number" id="pid-y-ki" step="0.01" value="0.1">
+                    </div>
+                    <div class="form-group">
+                        <label>Kd</label>
+                        <input type="number" id="pid-y-kd" step="0.1" value="0.2">
+                    </div>
+                </div>
+
+                <div id="control-tab" class="tab-content">
+                    <div class="form-group">
+                        <label>Update Rate (Hz)</label>
+                        <input type="number" id="update-rate" min="10" max="100" value="50">
+                    </div>
+                    <div class="form-group">
+                        <label>Max Tilt Angle (degrees)</label>
+                        <input type="number" id="max-tilt" min="5" max="30" value="15">
+                    </div>
+                    <div class="form-group">
+                        <label>Velocity Damping (0-1)</label>
+                        <input type="number" id="velocity-damping" min="0" max="1" step="0.1" value="0.3">
+                    </div>
+                </div>
+
+                <div id="camera-tab" class="tab-content">
+                    <div class="form-group">
+                        <label>Camera Device</label>
+                        <input type="text" id="camera-device" placeholder="/dev/video0">
+                    </div>
+                    <div class="form-group">
+                        <label>Resolution Width</label>
+                        <input type="number" id="camera-width" value="640">
+                    </div>
+                    <div class="form-group">
+                        <label>Resolution Height</label>
+                        <input type="number" id="camera-height" value="480">
+                    </div>
+                    <div class="form-group">
+                        <label>FPS</label>
+                        <input type="number" id="camera-fps" value="30">
+                    </div>
+                </div>
+
+                <div class="config-actions">
+                    <button class="btn btn-primary" onclick="saveConfig()">Save Configuration</button>
+                    <button class="btn btn-secondary" onclick="loadConfig()">Reload</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
