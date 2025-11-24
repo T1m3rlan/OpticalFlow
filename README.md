@@ -8,6 +8,8 @@ Optical-flow-based position hold loop for Betaflight quads using a Raspberry Pi 
 - MSP v1 `MSP_SET_RAW_RC` output—no FC firmware changes required.
 - Dry-run mode that uses prerecorded video files for tuning on a laptop.
 - CSV telemetry for later plotting plus YAML configuration for every subsystem.
+- Local FastAPI web UI for live config edits and a touchscreen-friendly virtual stick.
+- Supports CSI, USB, and analog FPV receivers (`analog:/dev/video0`) as camera inputs.
 
 ## Hardware & Wiring
 - Raspberry Pi Zero 2 W (Zero W works with lower headroom).
@@ -42,17 +44,31 @@ Dry-run on the bench first:
 betafly-stabilizer -c betafly.yaml --dry-run --log-level DEBUG
 ```
 
+Launch the GUI + manual stick overlay with:
+
+```bash
+betafly-stabilizer -c betafly.yaml --web-ui
+```
+
 Remove `--dry-run` only after verifying telemetry and MSP wiring.
 
 ## Config Primer
 See `config/default.yaml` for documented defaults:
-- `camera`: resolution/FPS and `video_source` (e.g. `file:/home/pi/logs/run.mp4`).
+- `camera`: resolution/FPS and `video_source` (e.g. `analog:/dev/video0`, `file:/home/pi/logs/run.mp4`).
 - `flow`: number of corners, quality level, pixel → meter scale, confidence gate.
 - `filter`: median window, EMA alpha, and deadband to suppress jitter.
 - `pid`: per-axis gains, integrator clamp, and output limit (fraction of RC trim).
 - `msp`: UART path, baud, RC min/mid/max, command rate, and maximum trim in µs.
 - `telemetry_path`: path for CSV logs (set `null` to disable).
 - `dry_run`: bypass MSP writes (handy for laptop debugging).
+- `manual_input`: enable/scale planar velocity commands coming from the web joystick or a future joystick backend.
+- `web`: enable the local FastAPI server, choose host/port.
+## Web UI & Manual Stick Overrides
+- Set `manual_input.enabled: true` and optionally tweak `manual_input.max_velocity` (m/s).
+- Run `betafly-stabilizer ... --web-ui` (or set `web.enabled: true`) and browse to `http://<pi>:8080`.
+- Edit config JSON in the browser; click **Save Config** to write back to YAML (restart required for camera/ PID changes).
+- Move the on-screen sliders to command forward/right velocities while the optical hold loop remains engaged—think of it as a “position hold with nudges”.
+- Hit **Reset Stick** or set `manual_input.enabled: false` to hand full control back to your radio.
 
 Architecture details live in `docs/architecture.md`.
 

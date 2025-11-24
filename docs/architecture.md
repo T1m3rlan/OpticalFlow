@@ -30,6 +30,14 @@
    - Loads YAML config, spawns camera + stabilizer runner, publishes telemetry (stdout or UDP).
    - Supports dry-run mode for on-host testing with prerecorded video.
 
+7. **Manual Override State (`manual.py`)**
+   - Thread-safe buffer for desired planar velocity setpoints sourced from web UI sliders (or future controllers).
+   - Automatically zeroed whenever manual mode is disabled.
+
+8. **Web UI (`web.py`)**
+   - FastAPI server with a JSON config editor and touchscreen-friendly dual-axis slider.
+   - Writes back to YAML and streams normalized stick positions to the manual override state.
+
 ### Data Flow
 ```
 Camera → Optical Flow → Filters → PID Controller → MSP RC Overrides
@@ -37,15 +45,17 @@ Camera → Optical Flow → Filters → PID Controller → MSP RC Overrides
 
 ### Threading Model
 - Camera and optical flow run in the main async loop using `asyncio` tasks.
+- Web UI (if enabled) lives in a background thread sharing config + manual state via locks.
 - MSP writes are coalesced to ≤50 Hz to avoid overwhelming the FCU.
 - Clean shutdown via signals; each stage exposes `start()/stop()` hooks.
 
 ### Configuration
 - YAML file defines:
-  - Camera settings (resolution, FPS, exposure).
+  - Camera settings (resolution, FPS, exposure) plus `video_source` (`analog:/dev/video0`, `file:...`, etc.).
   - Optical flow parameters (features, quality, pixel-to-meter scale).
   - PID gains / integrator clamps.
   - MSP port/baud and RC channel mapping.
+  - Manual input scaling + enable flag, web UI host/port.
   - Safety constraints (max correction, arming guard).
 
 ### Telemetry & Logging

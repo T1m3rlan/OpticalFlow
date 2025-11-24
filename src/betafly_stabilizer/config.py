@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Mapping, Optional
 
@@ -63,6 +63,19 @@ class MspConfig:
 
 
 @dataclass
+class ManualInputConfig:
+    enabled: bool = False
+    max_velocity: float = 0.4  # m/s target per axis
+
+
+@dataclass
+class WebServerConfig:
+    enabled: bool = False
+    host: str = "0.0.0.0"
+    port: int = 8080
+
+
+@dataclass
 class StabilizerConfig:
     camera: CameraConfig = field(default_factory=CameraConfig)
     flow: FlowConfig = field(default_factory=FlowConfig)
@@ -72,6 +85,8 @@ class StabilizerConfig:
     msp: MspConfig = field(default_factory=MspConfig)
     telemetry_path: Optional[str] = "telemetry.csv"
     dry_run: bool = False
+    manual_input: ManualInputConfig = field(default_factory=ManualInputConfig)
+    web: WebServerConfig = field(default_factory=WebServerConfig)
 
 
 def _update_dataclass(dc: Any, values: Mapping[str, Any]) -> None:
@@ -80,8 +95,7 @@ def _update_dataclass(dc: Any, values: Mapping[str, Any]) -> None:
             setattr(dc, key, value)
 
 
-def _build_config(data: Mapping[str, Any]) -> StabilizerConfig:
-    config = StabilizerConfig()
+def _apply_sections(config: StabilizerConfig, data: Mapping[str, Any]) -> StabilizerConfig:
     if "camera" in data:
         _update_dataclass(config.camera, data["camera"])
     if "flow" in data:
@@ -100,7 +114,21 @@ def _build_config(data: Mapping[str, Any]) -> StabilizerConfig:
         config.telemetry_path = data["telemetry_path"]
     if "dry_run" in data:
         config.dry_run = bool(data["dry_run"])
+    if "manual_input" in data:
+        _update_dataclass(config.manual_input, data["manual_input"])
+    if "web" in data:
+        _update_dataclass(config.web, data["web"])
     return config
+
+
+def _build_config(data: Mapping[str, Any]) -> StabilizerConfig:
+    config = StabilizerConfig()
+    return _apply_sections(config, data)
+
+
+def apply_overrides(config: StabilizerConfig, overrides: Mapping[str, Any]) -> StabilizerConfig:
+    """Apply partial overrides to an existing config instance."""
+    return _apply_sections(config, overrides)
 
 
 def load_config(path: Optional[str | Path]) -> StabilizerConfig:
@@ -118,6 +146,11 @@ def load_config(path: Optional[str | Path]) -> StabilizerConfig:
     return _build_config(data)
 
 
+def config_to_dict(config: StabilizerConfig) -> Mapping[str, Any]:
+    """Convert config dataclass tree to plain dict."""
+    return asdict(config)
+
+
 __all__ = [
     "CameraConfig",
     "FlowConfig",
@@ -125,5 +158,9 @@ __all__ = [
     "FilterConfig",
     "MspConfig",
     "StabilizerConfig",
+    "ManualInputConfig",
+    "WebServerConfig",
     "load_config",
+    "apply_overrides",
+    "config_to_dict",
 ]

@@ -12,6 +12,7 @@ from typing import Optional, Tuple
 from .camera import CameraStream
 from .config import StabilizerConfig
 from .filters import FlowFilter
+from .manual import ManualOverrideState
 from .msp import MSPClient
 from .optical_flow import FlowEstimate, OpticalFlowTracker
 from .pid import PIDController, PIDGains
@@ -20,7 +21,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 class OpticalStabilizer:
-    def __init__(self, config: StabilizerConfig):
+    def __init__(self, config: StabilizerConfig, manual_state: Optional[ManualOverrideState] = None):
         self.config = config
         self.camera = CameraStream(config.camera)
         self.flow = OpticalFlowTracker(config.flow)
@@ -32,6 +33,7 @@ class OpticalStabilizer:
         self._telemetry_file = None
         self._running = False
         self._guard_frames = config.flow.guard_frames
+        self.manual_state = manual_state
 
     def _open_telemetry(self) -> None:
         if not self.config.telemetry_path:
@@ -62,8 +64,13 @@ class OpticalStabilizer:
 
     def _handle_estimate(self, estimate: FlowEstimate) -> None:
         filtered_vx, filtered_vy = self.filter.push(estimate.vx, estimate.vy)
-        pitch_error = -filtered_vx
-        roll_error = filtered_vy
+        vx_target = 0.0
+        vy_target = 0.0
+        if self.manual_state and self.config.manual_input.enabled:
+            vx_target, vy_target = self.manual_state.get_target()
+
+        pitch_error = vx_target - filtered_vx
+        roll_error = filtered_vy - vy_target
 
         roll_cmd = self.pid_roll.update(roll_error, estimate.dt)
         pitch_cmd = self.pid_pitch.update(pitch_error, estimate.dt)

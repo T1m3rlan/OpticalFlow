@@ -2,3 +2,5 @@ numpy>=1.23
 opencv-python>=4.8
 pyserial>=3.5
 PyYAML>=6.0
+fastapi>=0.110
+uvicorn>=0.23

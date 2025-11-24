@@ -40,3 +40,10 @@ msp:
   max_trim: 80
 telemetry_path: telemetry.csv
 dry_run: true
+manual_input:
+  enabled: false
+  max_velocity: 0.4
+web:
+  enabled: false
+  host: 0.0.0.0
+  port: 8080

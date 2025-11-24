@@ -42,12 +42,26 @@ class CameraStream:
             path = source.split(":", 1)[1]
             LOGGER.info("Opening video file: %s", path)
             self._cap = cv2.VideoCapture(path)
+        elif source.startswith("analog:") or source.startswith("v4l2:"):
+            device = source.split(":", 1)[1] or "/dev/video0"
+            LOGGER.info("Opening analog video device: %s", device)
+            self._cap = cv2.VideoCapture(device, cv2.CAP_V4L2)
         else:
             index = 0
             if source.startswith("cv:"):
                 index = int(source.split(":", 1)[1])
-            LOGGER.info("Opening camera index %s", index)
-            self._cap = cv2.VideoCapture(index)
+            elif source != "auto":
+                # Treat literal integers as cv indexes.
+                try:
+                    index = int(source)
+                except ValueError:
+                    LOGGER.info("Opening camera by path: %s", source)
+                    self._cap = cv2.VideoCapture(source)
+            if self._cap is None:
+                LOGGER.info("Opening camera index %s", index)
+                self._cap = cv2.VideoCapture(index)
+
+        if self._cap and not source.startswith("file:"):
             self._cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.config.width)
             self._cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.config.height)
             self._cap.set(cv2.CAP_PROP_FPS, self.config.fps)
