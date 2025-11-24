@@ -1,0 +1,42 @@
+camera:
+  width: 160
+  height: 120
+  fps: 30.0
+  video_source: auto
+  rotation: 0
+flow:
+  max_corners: 60
+  quality_level: 0.3
+  min_distance: 7
+  pixel_to_meter: 0.002
+  confidence_threshold: 0.35
+  guard_frames: 30
+filter:
+  ema_alpha: 0.35
+  median_window: 5
+  deadband: 0.01
+pid:
+  roll:
+    kp: 0.8
+    ki: 0.15
+    kd: 0.05
+    i_clamp: 0.25
+    output_limit: 0.5
+  pitch:
+    kp: 0.8
+    ki: 0.15
+    kd: 0.05
+    i_clamp: 0.25
+    output_limit: 0.5
+msp:
+  port: /dev/ttyAMA0
+  baudrate: 115200
+  roll_channel: 0
+  pitch_channel: 1
+  command_rate_hz: 30
+  rc_mid: 1500
+  rc_min: 1100
+  rc_max: 1900
+  max_trim: 80
+telemetry_path: telemetry.csv
+dry_run: true
