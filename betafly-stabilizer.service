@@ -1,0 +1,16 @@
+[Unit]
+Description=Betafly Optical Position Stabilization Service
+After=network.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/betafly-stabilization
+ExecStart=/usr/bin/python3 /home/pi/betafly-stabilization/betafly_stabilizer.py --config /home/pi/betafly-stabilization/config.json --mode velocity_damping
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,17 @@
+# Betafly Optical Position Stabilization
+# Requirements for Raspberry Pi Zero
+
+# Core dependencies
+spidev>=3.5
+RPi.GPIO>=0.7.1
+
+# Optional dependencies for flight controller communication
+pymavlink>=2.4.37  # For MAVLink protocol
+pyserial>=3.5      # For serial communication
+
+# Data processing and utilities
+numpy>=1.21.0      # For advanced math operations
+
+# Development and testing
+pytest>=7.0.0      # For unit tests
+pytest-cov>=3.0.0  # For code coverage

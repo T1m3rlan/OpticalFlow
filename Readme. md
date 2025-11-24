@@ -1,1 +1,27 @@
-...
+# Betafly Optical Position Stabilization
+
+See [README.md](README.md) for full documentation.
+
+## Quick Start
+
+```bash
+# 1. Run setup script
+./setup.sh
+
+# 2. Test sensor
+./test_sensor.py
+
+# 3. Start stabilization
+./betafly_stabilizer.py --mode velocity_damping
+```
+
+## Project Files
+
+- `betafly_stabilizer.py` - Main control script
+- `optical_flow_sensor.py` - PMW3901 sensor interface
+- `position_stabilizer.py` - PID control and stabilization algorithms
+- `config.json` - Configuration file
+- `setup.sh` - Automated setup script
+- `test_sensor.py` - Sensor testing utility
+- `requirements.txt` - Python dependencies
+- `README.md` - Complete documentation

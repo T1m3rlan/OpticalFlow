@@ -1,0 +1,47 @@
+{
+  "sensor": {
+    "spi_bus": 0,
+    "spi_device": 0,
+    "rotation": 0,
+    "comment": "Rotation: 0, 90, 180, or 270 degrees based on sensor mounting"
+  },
+  "tracker": {
+    "scale_factor": 0.001,
+    "initial_height": 0.5,
+    "comment": "scale_factor converts sensor units to meters, height is in meters"
+  },
+  "pid": {
+    "position_x": {
+      "kp": 0.5,
+      "ki": 0.1,
+      "kd": 0.2,
+      "comment": "PID gains for X-axis position control"
+    },
+    "position_y": {
+      "kp": 0.5,
+      "ki": 0.1,
+      "kd": 0.2,
+      "comment": "PID gains for Y-axis position control"
+    }
+  },
+  "stabilizer": {
+    "velocity_damping": 0.3,
+    "max_tilt_angle": 15.0,
+    "comment": "velocity_damping: 0-1, max_tilt_angle in degrees"
+  },
+  "control": {
+    "update_rate_hz": 50,
+    "comment": "Control loop frequency in Hz (recommended: 50-100)"
+  },
+  "logging": {
+    "enabled": false,
+    "file": "flight_log.csv",
+    "comment": "Enable data logging for analysis"
+  },
+  "output": {
+    "interface": "mavlink",
+    "port": "/dev/ttyAMA0",
+    "baudrate": 115200,
+    "comment": "Flight controller interface: mavlink, msp, or pwm"
+  }
+}
