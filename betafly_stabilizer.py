@@ -15,7 +15,8 @@ import logging
 from typing import Optional
 import json
 
-from optical_flow_sensor import PMW3901, OpticalFlowTracker
+from optical_flow_sensor import OpticalFlowTracker
+from camera_optical_flow import CameraOpticalFlow, auto_detect_camera
 from position_stabilizer import (
     StabilizationController, 
     PIDGains
@@ -44,13 +45,24 @@ class BetaflyStabilizer:
         # Load configuration
         self.config = self._load_config(config_file)
         
-        # Initialize optical flow sensor
-        logger.info("Initializing optical flow sensor...")
-        self.sensor = PMW3901(
-            spi_bus=self.config['sensor']['spi_bus'],
-            spi_device=self.config['sensor']['spi_device'],
-            rotation=self.config['sensor']['rotation']
+        # Initialize camera-based optical flow
+        logger.info("Initializing camera optical flow...")
+        camera_id = self.config.get('camera', {}).get('device', 'auto')
+        if camera_id == 'auto':
+            camera_id = auto_detect_camera()
+            if camera_id is None:
+                # Fallback to 0
+                camera_id = 0
+                logger.warning("No camera auto-detected, defaulting to ID 0")
+
+        self.sensor = CameraOpticalFlow(
+            camera_id=camera_id,
+            width=self.config.get('camera', {}).get('width', 640),
+            height=self.config.get('camera', {}).get('height', 480),
+            fps=self.config.get('camera', {}).get('fps', 30),
+            method=self.config.get('camera', {}).get('method', 'farneback')
         )
+        self.sensor.start()
         
         # Initialize optical flow tracker
         self.tracker = OpticalFlowTracker(
@@ -93,10 +105,12 @@ class BetaflyStabilizer:
     def _load_config(self, config_file: Optional[str]) -> dict:
         """Load configuration from file or use defaults"""
         default_config = {
-            'sensor': {
-                'spi_bus': 0,
-                'spi_device': 0,
-                'rotation': 0
+            'camera': {
+                'device': 'auto',
+                'width': 640,
+                'height': 480,
+                'fps': 30,
+                'method': 'farneback'
             },
             'tracker': {
                 'scale_factor': 0.001,
@@ -137,7 +151,12 @@ class BetaflyStabilizer:
                 with open(config_file, 'r') as f:
                     loaded_config = json.load(f)
                 # Merge loaded config with defaults
-                default_config.update(loaded_config)
+                for key, value in loaded_config.items():
+                    if isinstance(value, dict) and key in default_config:
+                        default_config[key].update(value)
+                    else:
+                        default_config[key] = value
+                        
                 logger.info(f"Loaded configuration from {config_file}")
             except Exception as e:
                 logger.warning(f"Could not load config file: {e}. Using defaults.")
@@ -165,7 +184,8 @@ class BetaflyStabilizer:
         self.running = False
         
         # Shutdown sensor
-        self.sensor.shutdown()
+        if hasattr(self.sensor, 'stop'):
+            self.sensor.stop()
         
         # Close log file
         if self.log_file:

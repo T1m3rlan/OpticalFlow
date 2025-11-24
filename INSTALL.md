@@ -2,18 +2,17 @@
 
 ## Hardware Setup
 
-### 1. Connect PMW3901 Sensor to Raspberry Pi Zero
+### 1. Connect Camera to Raspberry Pi Zero
 
-| PMW3901 Pin | Pi Zero Pin | Pin Number | Function |
-|-------------|-------------|------------|----------|
-| VCC         | 3.3V        | Pin 1      | Power    |
-| GND         | Ground      | Pin 6      | Ground   |
-| MOSI        | GPIO 10     | Pin 19     | SPI MOSI |
-| MISO        | GPIO 9      | Pin 21     | SPI MISO |
-| SCLK        | GPIO 11     | Pin 23     | SPI CLK  |
-| CS          | GPIO 8      | Pin 24     | SPI CE0  |
+#### Raspberry Pi Camera (CSI)
+1. Locate the CSI camera connector on the Pi Zero (the smaller connector).
+2. Use the specific Pi Zero camera cable.
+3. Insert cable with metal contacts facing **towards the board**.
+4. Connect other end to camera module.
 
-**Mounting**: Sensor should face downward with clear view of ground surface.
+#### USB Camera / Analog Capture
+1. Use a USB OTG adapter (Micro USB to USB A).
+2. Plug in your USB webcam or USB Capture Card.
 
 ### 2. Power Supply
 
@@ -34,7 +33,7 @@ cd betafly-stabilization
 # Run setup script
 ./setup.sh
 
-# Reboot to enable SPI (if prompted)
+# Reboot to enable Camera (if prompted)
 sudo reboot
 ```
 
@@ -45,17 +44,17 @@ sudo reboot
 sudo apt-get update && sudo apt-get upgrade -y
 
 # 2. Install dependencies
-sudo apt-get install -y python3 python3-pip python3-dev git
+sudo apt-get install -y python3 python3-pip python3-dev git libopencv-dev python3-opencv
 
-# 3. Enable SPI
+# 3. Enable Camera
 sudo raspi-config
-# Interface Options -> SPI -> Enable
+# Interface Options -> Legacy Camera (or Camera) -> Enable
 
 # 4. Install Python packages
 pip3 install -r requirements.txt
 
 # 5. Make scripts executable
-chmod +x betafly_stabilizer.py test_sensor.py setup.sh
+chmod +x betafly_stabilizer.py betafly_stabilizer_advanced.py setup.sh
 
 # 6. Reboot
 sudo reboot
@@ -63,33 +62,17 @@ sudo reboot
 
 ## Verification
 
-### 1. Test Sensor Connection
-
+### 1. Test Camera
 ```bash
-./test_sensor.py --test connection
+python3 -c "import cv2; print(cv2.VideoCapture(0).isOpened())"
 ```
+Should print `True`.
 
-Expected output:
-```
-✓ Sensor initialized successfully
-✓ Product ID: 0x49
-```
-
-### 2. Test Motion Detection
-
+### 2. Run Advanced Script
 ```bash
-./test_sensor.py --test motion --duration 5
+./betafly_stabilizer_advanced.py --verbose
 ```
-
-Move the sensor and verify motion values change.
-
-### 3. Test Position Tracking
-
-```bash
-./test_sensor.py --test tracking --duration 10
-```
-
-Move sensor in a pattern and observe position integration.
+Check logs for "Camera initialized" and "Pos: ..." updates.
 
 ## Configuration
 
@@ -101,10 +84,15 @@ nano config.json
 
 ### 2. Key Settings to Adjust
 
-**Sensor Rotation**: Match physical mounting
+**Camera Resolution/Method**:
 ```json
-"rotation": 0  // 0, 90, 180, or 270 degrees
+"camera": {
+  "width": 320,
+  "height": 240,
+  "method": "lucas_kanade"
+}
 ```
+(Use lower resolution and "lucas_kanade" for Pi Zero)
 
 **Flight Height**: Expected altitude above ground
 ```json
@@ -125,14 +113,14 @@ nano config.json
 ### Manual Start
 
 ```bash
-# Velocity damping mode (recommended for first flight)
-./betafly_stabilizer.py --mode velocity_damping
+# Start advanced system
+./betafly_stabilizer_advanced.py
 
-# Position hold mode
-./betafly_stabilizer.py --mode position_hold
+# Start with specific mode
+./betafly_stabilizer_advanced.py --mode velocity_damping
 
 # With logging enabled
-./betafly_stabilizer.py --mode position_hold --log
+./betafly_stabilizer_advanced.py --log
 ```
 
 ### Auto-Start on Boot (Optional)
@@ -189,23 +177,23 @@ sudo journalctl -u betafly-stabilizer.service -f
 
 ### Safety Checklist
 
-- [ ] Sensor securely mounted and facing down
+- [ ] Camera securely mounted and facing down
 - [ ] All connections secure and insulated
 - [ ] Pi powered from stable BEC (not USB)
 - [ ] Manual control mode configured as backup
 - [ ] Test area is safe and clear
-- [ ] Adequate lighting for optical tracking
+- [ ] Adequate lighting
 - [ ] Textured surface below (not uniform/blank)
 
 ### Test Procedure
 
 1. **Ground Test**
    ```bash
-   ./betafly_stabilizer.py --mode velocity_damping --log
+   ./betafly_stabilizer_advanced.py --mode velocity_damping --log
    ```
    - Move drone manually on ground
-   - Verify sensor responds correctly
-   - Check logs show reasonable values
+   - Verify position tracking responds correctly
+   - Check web interface for visualization
 
 2. **Hover Test**
    - Start in manual mode
@@ -221,104 +209,28 @@ sudo journalctl -u betafly-stabilizer.service -f
 
 ## Troubleshooting
 
-### SPI Not Working
+### Camera Not Working
 
 ```bash
-# Check SPI is enabled
-ls /dev/spi*
-# Should show: /dev/spidev0.0  /dev/spidev0.1
+# Check if device exists
+ls /dev/video*
 
-# Check kernel module loaded
-lsmod | grep spi
-# Should show: spi_bcm2835
-
-# If not enabled:
-sudo raspi-config
-# Interface Options -> SPI -> Enable -> Reboot
-```
-
-### Sensor Not Responding
-
-```bash
-# Test with spidev directly
-python3 -c "import spidev; s = spidev.SpiDev(); s.open(0,0); print('OK')"
-
-# Check wiring with multimeter
-# VCC should be 3.3V
-# GND should be 0V
+# Check permissions
+groups
+# Should include 'video'
 ```
 
 ### Poor Tracking
 
 - Ensure good lighting (not direct sun)
 - Check surface has visible texture
-- Clean sensor lens
+- Clean camera lens
 - Verify height setting is accurate
 - Reduce vibrations (add damping)
 
-### Permission Errors
+### Slow Performance on Pi Zero
 
-```bash
-# Add user to SPI group
-sudo usermod -a -G spi,gpio pi
-
-# Make scripts executable
-chmod +x *.py *.sh
-
-# Reboot
-sudo reboot
-```
-
-## Performance Optimization
-
-### For Raspberry Pi Zero
-
-```json
-{
-  "control": {
-    "update_rate_hz": 30  // Reduce from 50
-  },
-  "logging": {
-    "enabled": false  // Disable for production
-  }
-}
-```
-
-Optional overclock (`/boot/config.txt`):
-```
-arm_freq=1000
-over_voltage=2
-```
-
-### For Raspberry Pi Zero 2 W
-
-Can handle higher rates:
-```json
-{
-  "control": {
-    "update_rate_hz": 100
-  }
-}
-```
-
-## Next Steps
-
-1. ✓ Verify sensor working
-2. ✓ Configure for your setup
-3. ✓ Ground test tracking
-4. → Tune PID gains (see README.md)
-5. → Implement flight controller interface
-6. → Flight test in safe area
-
-## Support
-
-- Documentation: [README.md](README.md)
-- Tuning Guide: See "Tuning Guide" section in README.md
-- Issues: Create GitHub issue with logs
-
-## Safety Reminder
-
-⚠️ **Always have manual override ready**
-⚠️ **Test in safe, controlled environment**
-⚠️ **Monitor battery voltage**
-⚠️ **Never fly over people**
+- Switch to `lucas_kanade` method
+- Reduce resolution to 320x240
+- Reduce update rate to 30Hz
+- Disable web interface (`--no-web`)

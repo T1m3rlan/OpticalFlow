@@ -31,16 +31,21 @@ sudo apt-get install -y \
     python3-pip \
     python3-dev \
     python3-setuptools \
+    libopencv-dev \
+    python3-opencv \
     git
 
-# Enable SPI
-echo "[3/6] Enabling SPI interface..."
-if ! grep -q "^dtparam=spi=on" /boot/config.txt; then
-    echo "dtparam=spi=on" | sudo tee -a /boot/config.txt
-    echo "SPI enabled (reboot required)"
+# Enable Camera (Legacy for older OS, or libcamera for newer)
+echo "[3/6] Checking Camera Configuration..."
+# Note: Camera setup varies by OS version.
+# This is a basic check/enable for legacy camera support which OpenCV often uses.
+if ! grep -q "^start_x=1" /boot/config.txt; then
+    echo "start_x=1" | sudo tee -a /boot/config.txt
+    echo "gpu_mem=128" | sudo tee -a /boot/config.txt
+    echo "Camera interface enabled (reboot required)"
     REBOOT_REQUIRED=1
 else
-    echo "SPI already enabled"
+    echo "Camera configuration found in config.txt"
 fi
 
 # Install Python dependencies
@@ -51,11 +56,12 @@ pip3 install -r requirements.txt
 # Make scripts executable
 echo "[5/6] Setting file permissions..."
 chmod +x betafly_stabilizer.py
+chmod +x betafly_stabilizer_advanced.py
 
 # Test installation
 echo "[6/6] Testing installation..."
-python3 -c "import spidev; print('✓ spidev installed')"
-python3 -c "from optical_flow_sensor import PMW3901; print('✓ optical_flow_sensor OK')"
+python3 -c "import cv2; print('✓ OpenCV installed')"
+python3 -c "from optical_flow_sensor import OpticalFlowTracker; print('✓ optical_flow_sensor OK')"
 python3 -c "from position_stabilizer import StabilizationController; print('✓ position_stabilizer OK')"
 
 echo ""
@@ -65,7 +71,7 @@ echo "================================================"
 echo ""
 
 if [ "$REBOOT_REQUIRED" = "1" ]; then
-    echo "⚠️  REBOOT REQUIRED to enable SPI interface"
+    echo "⚠️  REBOOT REQUIRED to enable Camera interface"
     echo ""
     read -p "Reboot now? (y/n) " -n 1 -r
     echo
@@ -75,6 +81,8 @@ if [ "$REBOOT_REQUIRED" = "1" ]; then
 else
     echo "✓ All set! You can now run:"
     echo "  ./betafly_stabilizer.py --help"
+    echo "  or"
+    echo "  ./betafly_stabilizer_advanced.py --help"
 fi
 
 echo ""
