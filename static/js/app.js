@@ -8,6 +8,16 @@ document.addEventListener('DOMContentLoaded', () => {
     startStatusUpdates();
 });
 
+function getNumberInput(id, fallback = 0) {
+    const value = parseFloat(document.getElementById(id).value);
+    return isNaN(value) ? fallback : value;
+}
+
+function getIntInput(id, fallback = 0) {
+    const value = parseInt(document.getElementById(id).value, 10);
+    return isNaN(value) ? fallback : value;
+}
+
 // API calls
 async function apiCall(endpoint, method = 'GET', data = null) {
     const options = {
@@ -59,81 +69,109 @@ async function loadConfig() {
 
 // Update UI with config values
 function updateConfigUI() {
+    const sensorConfig = config.sensor || {};
+    const trackerConfig = config.tracker || {};
+    const pidConfig = config.pid || {};
+    const stabilizerConfig = config.stabilizer || {};
+    const controlConfig = config.control || {};
+    const cameraConfig = config.camera || {};
+
     // Sensor tab
-    if (config.sensor) {
-        document.getElementById('sensor-rotation').value = config.sensor.rotation || 0;
-        document.getElementById('scale-factor').value = config.tracker?.scale_factor || 0.001;
-    }
+    document.getElementById('sensor-rotation').value = sensorConfig.rotation ?? 0;
+    document.getElementById('scale-factor').value = trackerConfig.scale_factor ?? 0.001;
+
+    const cameraTypeSelect = document.getElementById('camera-type-select');
+    const cameraType = sensorConfig.type || 'pmw3901';
+    cameraTypeSelect.value = cameraType;
+    document.getElementById('i2c-address').value = sensorConfig.i2c_address ?? 41;
+    updateCameraType();
+
+    const heightValue = trackerConfig.initial_height ?? 0.5;
+    document.getElementById('height-input').value = heightValue;
+    document.getElementById('height-slider').value = heightValue;
     
     // PID tab
-    if (config.pid) {
-        document.getElementById('pid-x-kp').value = config.pid.position_x?.kp || 0.5;
-        document.getElementById('pid-x-ki').value = config.pid.position_x?.ki || 0.1;
-        document.getElementById('pid-x-kd').value = config.pid.position_x?.kd || 0.2;
-        document.getElementById('pid-y-kp').value = config.pid.position_y?.kp || 0.5;
-        document.getElementById('pid-y-ki').value = config.pid.position_y?.ki || 0.1;
-        document.getElementById('pid-y-kd').value = config.pid.position_y?.kd || 0.2;
-    }
+    document.getElementById('pid-x-kp').value = pidConfig.position_x?.kp ?? 0.5;
+    document.getElementById('pid-x-ki').value = pidConfig.position_x?.ki ?? 0.1;
+    document.getElementById('pid-x-kd').value = pidConfig.position_x?.kd ?? 0.2;
+    document.getElementById('pid-y-kp').value = pidConfig.position_y?.kp ?? 0.5;
+    document.getElementById('pid-y-ki').value = pidConfig.position_y?.ki ?? 0.1;
+    document.getElementById('pid-y-kd').value = pidConfig.position_y?.kd ?? 0.2;
     
     // Control tab
-    if (config.control) {
-        document.getElementById('update-rate').value = config.control.update_rate_hz || 50;
-    }
-    if (config.stabilizer) {
-        document.getElementById('max-tilt').value = config.stabilizer.max_tilt_angle || 15;
-        document.getElementById('velocity-damping').value = config.stabilizer.velocity_damping || 0.3;
-    }
+    document.getElementById('update-rate').value = controlConfig.update_rate_hz ?? 50;
+    document.getElementById('max-tilt').value = stabilizerConfig.max_tilt_angle ?? 15;
+    document.getElementById('velocity-damping').value = stabilizerConfig.velocity_damping ?? 0.3;
     
     // Camera tab
-    if (config.camera) {
-        document.getElementById('camera-device').value = config.camera.device || '/dev/video0';
-        document.getElementById('camera-width').value = config.camera.width || 640;
-        document.getElementById('camera-height').value = config.camera.height || 480;
-        document.getElementById('camera-fps').value = config.camera.fps || 30;
-    }
+    document.getElementById('camera-device').value = cameraConfig.device ?? '/dev/video0';
+    document.getElementById('camera-width').value = cameraConfig.width ?? 640;
+    document.getElementById('camera-height').value = cameraConfig.height ?? 480;
+    document.getElementById('camera-fps').value = cameraConfig.fps ?? 30;
 }
 
 // Save configuration
 async function saveConfig() {
+    const sensorConfig = config.sensor || {};
+    const trackerConfig = config.tracker || {};
+    const cameraConfig = config.camera || {};
+
     // Build config object from UI
     const newConfig = {
         sensor: {
-            spi_bus: config.sensor?.spi_bus || 0,
-            spi_device: config.sensor?.spi_device || 0,
-            rotation: parseInt(document.getElementById('sensor-rotation').value),
-            type: document.getElementById('camera-type-select').value
+            spi_bus: sensorConfig.spi_bus ?? 0,
+            spi_device: sensorConfig.spi_device ?? 0,
+            rotation: getIntInput('sensor-rotation', sensorConfig.rotation ?? 0),
+            type: document.getElementById('camera-type-select').value,
+            i2c_bus: sensorConfig.i2c_bus ?? 1,
+            i2c_address: getIntInput('i2c-address', sensorConfig.i2c_address ?? 41)
         },
         tracker: {
-            scale_factor: parseFloat(document.getElementById('scale-factor').value),
-            initial_height: parseFloat(document.getElementById('height-input').value)
+            scale_factor: getNumberInput('scale-factor', trackerConfig.scale_factor ?? 0.001),
+            initial_height: getNumberInput('height-input', trackerConfig.initial_height ?? 0.5)
         },
         pid: {
             position_x: {
-                kp: parseFloat(document.getElementById('pid-x-kp').value),
-                ki: parseFloat(document.getElementById('pid-x-ki').value),
-                kd: parseFloat(document.getElementById('pid-x-kd').value)
+                kp: getNumberInput('pid-x-kp', 0.5),
+                ki: getNumberInput('pid-x-ki', 0.1),
+                kd: getNumberInput('pid-x-kd', 0.2)
             },
             position_y: {
-                kp: parseFloat(document.getElementById('pid-y-kp').value),
-                ki: parseFloat(document.getElementById('pid-y-ki').value),
-                kd: parseFloat(document.getElementById('pid-y-kd').value)
+                kp: getNumberInput('pid-y-kp', 0.5),
+                ki: getNumberInput('pid-y-ki', 0.1),
+                kd: getNumberInput('pid-y-kd', 0.2)
             }
         },
         stabilizer: {
-            velocity_damping: parseFloat(document.getElementById('velocity-damping').value),
-            max_tilt_angle: parseFloat(document.getElementById('max-tilt').value)
+            velocity_damping: getNumberInput('velocity-damping', config.stabilizer?.velocity_damping ?? 0.3),
+            max_tilt_angle: getNumberInput('max-tilt', config.stabilizer?.max_tilt_angle ?? 15)
         },
         control: {
-            update_rate_hz: parseInt(document.getElementById('update-rate').value)
+            update_rate_hz: getIntInput('update-rate', config.control?.update_rate_hz ?? 50)
         },
         camera: {
-            device: document.getElementById('camera-device').value,
-            width: parseInt(document.getElementById('camera-width').value),
-            height: parseInt(document.getElementById('camera-height').value),
-            fps: parseInt(document.getElementById('camera-fps').value)
+            device: document.getElementById('camera-device').value || cameraConfig.device || 0,
+            width: getIntInput('camera-width', cameraConfig.width ?? 640),
+            height: getIntInput('camera-height', cameraConfig.height ?? 480),
+            fps: getIntInput('camera-fps', cameraConfig.fps ?? 30),
+            method: cameraConfig.method || 'farneback',
+            deinterlace: cameraConfig.deinterlace ?? true
         },
         logging: config.logging || { enabled: false, file: 'flight_log.csv' },
-        output: config.output || { interface: 'mavlink', port: '/dev/ttyAMA0', baudrate: 115200 }
+        output: config.output || { interface: 'mavlink', port: '/dev/ttyAMA0', baudrate: 115200 },
+        stick_input: config.stick_input || {
+            enabled: false,
+            protocol: 'mock',
+            device: '/dev/ttyAMA0',
+            channels: 8,
+            mix_ratio: 0.5,
+            mode_channel: 4
+        },
+        web_interface: config.web_interface || {
+            enabled: true,
+            host: '0.0.0.0',
+            port: 8080
+        }
     };
     
     const result = await apiCall('config', 'POST', newConfig);
@@ -291,7 +329,7 @@ async function setHeight(value) {
 }
 
 // Tab management
-function showTab(tabName) {
+function showTab(event, tabName) {
     // Hide all tabs
     document.querySelectorAll('.tab-content').forEach(tab => {
         tab.classList.remove('active');
@@ -306,7 +344,9 @@ function showTab(tabName) {
     document.getElementById(tabName + '-tab').classList.add('active');
     
     // Mark button as active
-    event.target.classList.add('active');
+    if (event && event.target) {
+        event.target.classList.add('active');
+    }
 }
 
 // Camera type update

@@ -12,6 +12,7 @@ import threading
 import time
 from typing import Optional
 import logging
+from queue import Queue
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +35,7 @@ system_state = {
 
 config_lock = threading.Lock()
 state_lock = threading.Lock()
+command_queue = Queue()
 
 CONFIG_FILE = 'config.json'
 
@@ -94,14 +96,19 @@ def get_state():
 def send_command():
     """Send command to system"""
     try:
-        cmd = request.json.get('command')
-        params = request.json.get('params', {})
+        payload = request.json or {}
+        cmd = payload.get('command')
+        params = payload.get('params', {}) or {}
+
+        if not cmd:
+            return jsonify({'success': False, 'error': 'Missing command'}), 400
         
         if cmd == 'set_mode':
             mode = params.get('mode')
             if mode in ['off', 'velocity_damping', 'position_hold']:
                 with state_lock:
                     system_state['mode'] = mode
+                command_queue.put({'command': cmd, 'params': params})
                 return jsonify({'success': True, 'message': f'Mode set to {mode}'})
             else:
                 return jsonify({'success': False, 'error': 'Invalid mode'}), 400
@@ -109,6 +116,7 @@ def send_command():
         elif cmd == 'reset_position':
             with state_lock:
                 system_state['position'] = {'x': 0.0, 'y': 0.0}
+            command_queue.put({'command': cmd, 'params': params})
             return jsonify({'success': True, 'message': 'Position reset'})
         
         elif cmd == 'set_height':
@@ -116,6 +124,7 @@ def send_command():
             if 0.1 <= height <= 5.0:
                 with state_lock:
                     system_state['height'] = height
+                command_queue.put({'command': cmd, 'params': {'height': height}})
                 return jsonify({'success': True, 'message': f'Height set to {height}m'})
             else:
                 return jsonify({'success': False, 'error': 'Height out of range'}), 400
@@ -123,6 +132,7 @@ def send_command():
         elif cmd == 'hold_position':
             with state_lock:
                 system_state['mode'] = 'position_hold'
+            command_queue.put({'command': cmd, 'params': params})
             return jsonify({'success': True, 'message': 'Position hold activated'})
         
         else:

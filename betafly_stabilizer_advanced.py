@@ -9,6 +9,7 @@ import signal
 import sys
 import argparse
 import logging
+from queue import Empty
 from typing import Optional
 import json
 from threading import Thread
@@ -17,7 +18,13 @@ from optical_flow_sensor import PMW3901, OpticalFlowTracker
 from camera_optical_flow import CameraOpticalFlow, AnalogCameraFlow, auto_detect_camera
 from position_stabilizer import StabilizationController, PIDGains
 from stick_input import StickInput, StickMixer, ModeSwitch
-from web_interface import app, system_state, state_lock, start_web_server
+from web_interface import app, system_state, state_lock, start_web_server, command_queue
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 # Try to import Caddx Infra 256
 try:
@@ -26,12 +33,6 @@ try:
 except ImportError:
     CADDX_AVAILABLE = False
     logger.warning("Caddx Infra 256 support not available")
-
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
 
 
 class BetaflyStabilizerAdvanced:
@@ -302,6 +303,9 @@ class BetaflyStabilizerAdvanced:
             # Update position tracking
             pos_x, pos_y = self.tracker.update()
             vel_x, vel_y = self.tracker.get_velocity()
+
+            # Apply commands received from the web interface
+            self._process_web_commands(pos_x, pos_y)
             
             # Check for mode switch from RC if enabled
             if self.mode_switch:
@@ -395,6 +399,45 @@ class BetaflyStabilizerAdvanced:
         """Send correction commands to flight controller"""
         # TODO: Implement flight controller communication
         pass
+
+    def _process_web_commands(self, pos_x: float, pos_y: float):
+        """Handle queued commands from the web interface"""
+        while True:
+            try:
+                command = command_queue.get_nowait()
+            except Empty:
+                break
+
+            if not command:
+                continue
+
+            cmd_name = command.get('command')
+            params = command.get('params', {}) or {}
+
+            if cmd_name == 'set_mode':
+                mode = params.get('mode')
+                if mode:
+                    logger.info(f"Web command: set_mode -> {mode}")
+                    self.stabilizer.set_mode(mode)
+                else:
+                    logger.warning("Web command set_mode missing 'mode' parameter")
+            elif cmd_name == 'reset_position':
+                logger.info("Web command: reset_position")
+                self.tracker.reset_position()
+            elif cmd_name == 'set_height':
+                height = params.get('height')
+                try:
+                    height_val = float(height)
+                except (TypeError, ValueError):
+                    logger.warning(f"Ignoring invalid height command: {height}")
+                    continue
+                logger.info(f"Web command: set_height -> {height_val:.2f}m")
+                self.tracker.set_height(height_val)
+            elif cmd_name == 'hold_position':
+                logger.info("Web command: hold_position")
+                self.stabilizer.hold_current_position(pos_x, pos_y)
+            else:
+                logger.warning(f"Unknown web command received: {cmd_name}")
     
     def _log_state(self, t, pos_x, pos_y, vel_x, vel_y, pitch, roll,
                    stick_p, stick_r, stick_t, stick_y, mode, squal):
