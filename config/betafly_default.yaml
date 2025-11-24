@@ -1,0 +1,53 @@
+camera:
+  width: 640
+  height: 480
+  framerate: 30
+  device_index: 0
+  use_picamera: false
+  rotation_deg: 0
+
+tracker:
+  max_corners: 150
+  quality_level: 0.01
+  min_distance: 7
+  block_size: 7
+  win_size: 21
+  pyramids: 3
+  reinit_threshold: 0.35
+  roi: [80, 60, 480, 360]
+
+pan_pid:
+  kp: 0.08
+  ki: 0.02
+  kd: 0.015
+  integrator_limit: 0.3
+  output_limit: 0.8
+  deadband: 0.01
+
+tilt_pid:
+  kp: 0.09
+  ki: 0.025
+  kd: 0.016
+  integrator_limit: 0.3
+  output_limit: 0.8
+  deadband: 0.01
+
+pan_actuator:
+  pin: 18
+  neutral_pulse_us: 1490
+  min_pulse_us: 1100
+  max_pulse_us: 1900
+  rate_limit_us: 120
+  simulate: true
+
+tilt_actuator:
+  pin: 19
+  neutral_pulse_us: 1510
+  min_pulse_us: 1100
+  max_pulse_us: 1900
+  rate_limit_us: 150
+  simulate: true
+
+control_rate_hz: 25.0
+preview: false
+log_path: telemetry.csv

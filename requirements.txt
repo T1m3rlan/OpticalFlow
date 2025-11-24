@@ -1,0 +1,5 @@
+numpy>=1.24.4
+opencv-python>=4.8.0.76
+PyYAML>=6.0.1
+picamera[array]>=1.13
+RPi.GPIO>=0.7.1
