@@ -64,42 +64,53 @@ hostname -I
 
 ---
 
-## Analog Camera Support
+## Camera Support
 
 ### Overview
-Now supports multiple camera types for optical flow:
-- **PMW3901**: Dedicated optical flow sensor (SPI) - Original
-- **Caddx Infra 256**: Infrared optical flow sensor (I2C) - **NEW!**
-- **USB Cameras**: Standard webcams
-- **CSI Cameras**: Raspberry Pi Camera Module
-- **Analog Cameras**: FPV cameras via USB capture cards
+Visual tracking now relies entirely on cameras—no dedicated optical-flow sensors required. Supported sources:
+- **CSI Cameras** – Raspberry Pi Camera Modules (IMX219 / OV5647)
+- **USB UVC Cameras** – Any webcam exposed through `/dev/video*`
+- **Analog FPV Cameras** – Via USB capture dongles (EasyCap, Elgato, generic UVC)
 
-### Why Use Analog Cameras?
-- Already have FPV camera on drone
-- No additional sensor needed
-- Works with existing camera setup
-- Better for daylight outdoor flying
+### Why Camera-Based?
+- Reuse existing FPV hardware on your aircraft
+- Wider field of view and richer pixels for optical flow
+- Works indoors and outdoors with proper lighting
+- No delicate SPI/I²C breakout boards to solder
 
-### Setup for Analog Camera
+### Quick Recipes
 
-#### 1. Hardware Connection
-```
-Analog FPV Camera -> USB Video Capture Card -> Raspberry Pi USB Port
-```
+**CSI Camera (IMX219 / OV5647)**
+1. Enable camera interface: `sudo raspi-config` → Interface Options → Camera → Enable.
+2. Set `sensor.type` to `csi_camera`.
+3. Leave `camera.device` as `0` or `"auto"`, resolution 640×480 @ 30 fps.
 
-Recommended capture cards:
-- EasyCap DC60
-- Elgato Cam Link 4K (high quality)
-- Generic USB video capture dongles
-
-#### 2. Software Configuration
-
-Edit `config.json`:
 ```json
 {
-  "sensor": {
-    "type": "analog_usb"
-  },
+  "sensor": { "type": "csi_camera", "rotation": 0 },
+  "camera": { "device": 0, "width": 640, "height": 480, "fps": 30 }
+}
+```
+
+**USB Webcam**
+1. Plug into the Pi (use powered hub for thirsty cameras).
+2. Identify the device: `ls /dev/video*`.
+3. Update `config.json`:
+
+```json
+{
+  "sensor": { "type": "usb_camera" },
+  "camera": { "device": "/dev/video0", "width": 640, "height": 480, "method": "farneback" }
+}
+```
+
+**Analog FPV Camera**
+1. Wire the FPV cam to a USB capture dongle and share ground with the Pi.
+2. Set `sensor.type` to `analog_usb`, `camera.device` to `/dev/video0`, and enable deinterlacing.
+
+```json
+{
+  "sensor": { "type": "analog_usb" },
   "camera": {
     "device": "/dev/video0",
     "width": 720,
@@ -111,100 +122,16 @@ Edit `config.json`:
 }
 ```
 
-#### 3. Test Camera
+Test any configuration with:
 
 ```bash
-# List available video devices
-ls /dev/video*
-
-# Test camera capture
-python3 -c "
+python3 - <<'PY'
 import cv2
 cap = cv2.VideoCapture(0)
 ret, frame = cap.read()
-print(f'Camera works: {ret}, Resolution: {frame.shape}')
+print("Camera ready:", ret, "shape:", None if frame is None else frame.shape)
 cap.release()
-"
-```
-
-### Camera Types Configuration
-
-#### Caddx Infra 256 (I2C Infrared Sensor)
-```json
-{
-  "sensor": {
-    "type": "caddx_infra256"
-  },
-  "sensor": {
-    "i2c_bus": 1,
-    "i2c_address": 41,
-    "rotation": 0
-  }
-}
-```
-
-**Advantages:**
-- Infrared technology (better in various lighting)
-- Simple I2C wiring (4 wires vs 6 for SPI)
-- Lower power consumption
-- Excellent for indoor/outdoor use
-
-**Setup:**
-1. Enable I2C: `sudo raspi-config` -> Interface Options -> I2C
-2. Wire to Pi: VCC(3.3V), GND, SDA(Pin 3), SCL(Pin 5)
-3. Test: `sudo i2cdetect -y 1` (should show 0x29)
-4. Run: `python3 caddx_infra256.py` to test
-
-See **[CADDX_INFRA256_GUIDE.md](CADDX_INFRA256_GUIDE.md)** for complete setup guide.
-
-#### USB Camera (Webcam)
-```json
-{
-  "sensor": {
-    "type": "usb_camera"
-  },
-  "camera": {
-    "device": 0,  // or "/dev/video0"
-    "width": 640,
-    "height": 480,
-    "method": "farneback"
-  }
-}
-```
-
-#### Raspberry Pi Camera (CSI)
-```bash
-# Enable camera interface first
-sudo raspi-config
-# Interface Options -> Camera -> Enable
-```
-
-```json
-{
-  "sensor": {
-    "type": "csi_camera"
-  },
-  "camera": {
-    "device": 0,
-    "width": 640,
-    "height": 480
-  }
-}
-```
-
-#### Analog Camera via USB
-```json
-{
-  "sensor": {
-    "type": "analog_usb"
-  },
-  "camera": {
-    "device": "/dev/video0",
-    "width": 720,
-    "height": 480,
-    "deinterlace": true
-  }
-}
+PY
 ```
 
 ### Optical Flow Methods
@@ -491,18 +418,16 @@ sudo cat /dev/ttyAMA0  # Should see garbage if SBUS working
 
 ## Performance Comparison
 
-| Feature | Pi Zero | Pi Zero 2W | Pi 4 |
-|---------|---------|------------|------|
-| PMW3901 | 50Hz ✓ | 100Hz ✓ | 100Hz ✓ |
-| Caddx Infra 256 | 50Hz ✓ | 100Hz ✓ | 100Hz ✓ |
-| USB Camera 320x240 | 30Hz ✓ | 50Hz ✓ | 100Hz ✓ |
-| USB Camera 640x480 | 15Hz ⚠️ | 30Hz ✓ | 60Hz ✓ |
-| Analog 720x480 | 10Hz ⚠️ | 30Hz ✓ | 50Hz ✓ |
-| Web Interface | ✓ | ✓ | ✓ |
-| SBUS Input | ✓ | ✓ | ✓ |
+| Source / Feature     | Pi Zero W      | Pi Zero 2 W   | Pi 4        |
+|----------------------|----------------|---------------|-------------|
+| CSI 640×480 @ 30 fps | 30Hz ✓         | 60Hz ✓        | 100Hz ✓     |
+| USB Cam 320×240      | 30Hz ✓         | 60Hz ✓        | 100Hz ✓     |
+| USB Cam 640×480      | 15Hz ⚠️        | 30Hz ✓        | 60Hz ✓      |
+| Analog 720×480       | 10Hz ⚠️        | 30Hz ✓        | 50Hz ✓      |
+| Web Interface        | ✓              | ✓             | ✓           |
+| SBUS Input           | ✓              | ✓             | ✓           |
 
-✓ = Works well
-⚠️ = Works but slow
+✓ = Works well  ⚠️ = Works but with reduced responsiveness
 
 ---
 
@@ -523,34 +448,18 @@ sudo cat /dev/ttyAMA0  # Should see garbage if SBUS working
 }
 ```
 
-### Configuration 2: Lightweight (Pi Zero)
+### Configuration 2: Lightweight (Pi Zero + CSI)
 ```json
 {
-  "sensor": {"type": "pmw3901"},
-  "control": {"update_rate_hz": 50},
+  "sensor": {"type": "csi_camera", "rotation": 0},
+  "camera": {"device": 0, "width": 320, "height": 240, "fps": 30},
+  "control": {"update_rate_hz": 40},
   "stick_input": {"enabled": true, "protocol": "sbus"},
   "web_interface": {"enabled": true}
 }
 ```
 
-### Configuration 4: Caddx Infra 256 (Recommended for Production)
-```json
-{
-  "sensor": {
-    "type": "caddx_infra256",
-    "i2c_address": 41,
-    "rotation": 0
-  },
-  "tracker": {
-    "scale_factor": 0.001,
-    "initial_height": 0.8
-  },
-  "control": {"update_rate_hz": 50},
-  "stick_input": {"enabled": true, "protocol": "sbus"}
-}
-```
-
-### Configuration 3: Camera Only (No PMW3901)
+### Configuration 3: Analog Capture (USB Dongle)
 ```json
 {
   "sensor": {"type": "analog_usb"},

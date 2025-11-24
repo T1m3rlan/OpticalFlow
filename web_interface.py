@@ -28,7 +28,7 @@ system_state = {
     'surface_quality': 0,
     'height': 0.5,
     'stick_inputs': {'pitch': 0, 'roll': 0, 'throttle': 0, 'yaw': 0},
-    'camera_type': 'pmw3901',
+    'camera_type': 'csi_camera',
     'last_update': time.time()
 }
 
@@ -137,12 +137,10 @@ def send_command():
 def get_camera_types():
     """Get available camera types"""
     camera_types = [
-        {'id': 'pmw3901', 'name': 'PMW3901 Optical Flow Sensor (SPI)'},
-        {'id': 'caddx_infra256', 'name': 'Caddx Infra 256 (I2C)'},
-        {'id': 'usb_camera', 'name': 'USB Camera (OpenCV)'},
-        {'id': 'csi_camera', 'name': 'Raspberry Pi Camera (CSI)'},
-        {'id': 'analog_usb', 'name': 'Analog Camera via USB Capture'},
-        {'id': 'opencv_any', 'name': 'Any OpenCV Compatible Camera'}
+        {'id': 'csi_camera', 'name': 'Raspberry Pi Camera (CSI – IMX219/OV5647)'},
+        {'id': 'usb_camera', 'name': 'USB Camera (UVC)'},
+        {'id': 'analog_usb', 'name': 'Analog FPV Camera via USB Capture'},
+        {'id': 'opencv_any', 'name': 'Auto-detect First Available Camera'}
     ]
     return jsonify({'success': True, 'cameras': camera_types})
 

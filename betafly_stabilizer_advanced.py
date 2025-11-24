@@ -13,19 +13,11 @@ from typing import Optional
 import json
 from threading import Thread
 
-from optical_flow_sensor import PMW3901, OpticalFlowTracker
 from camera_optical_flow import CameraOpticalFlow, AnalogCameraFlow, auto_detect_camera
+from flow_tracker import OpticalFlowTracker
 from position_stabilizer import StabilizationController, PIDGains
 from stick_input import StickInput, StickMixer, ModeSwitch
 from web_interface import app, system_state, state_lock, start_web_server
-
-# Try to import Caddx Infra 256
-try:
-    from caddx_infra256 import CaddxInfra256
-    CADDX_AVAILABLE = True
-except ImportError:
-    CADDX_AVAILABLE = False
-    logger.warning("Caddx Infra 256 support not available")
 
 logging.basicConfig(
     level=logging.INFO,
@@ -51,50 +43,8 @@ class BetaflyStabilizerAdvanced:
         # Load configuration
         self.config = self._load_config(config_file)
         
-        # Initialize sensor based on type
-        camera_type = self.config.get('sensor', {}).get('type', 'pmw3901')
-        logger.info(f"Initializing sensor: {camera_type}")
-        
-        if camera_type == 'pmw3901':
-            self.sensor = PMW3901(
-                spi_bus=self.config['sensor']['spi_bus'],
-                spi_device=self.config['sensor']['spi_device'],
-                rotation=self.config['sensor']['rotation']
-            )
-        elif camera_type == 'caddx_infra256':
-            if not CADDX_AVAILABLE:
-                raise RuntimeError("Caddx Infra 256 support not available. Install smbus2: pip install smbus2")
-            
-            self.sensor = CaddxInfra256(
-                bus_number=self.config['sensor'].get('i2c_bus', 1),
-                address=self.config['sensor'].get('i2c_address', 0x29),
-                rotation=self.config['sensor']['rotation']
-            )
-        elif camera_type in ['usb_camera', 'csi_camera', 'opencv_any']:
-            camera_id = self.config.get('camera', {}).get('device', 0)
-            if camera_id == 'auto':
-                camera_id = auto_detect_camera()
-                if camera_id is None:
-                    raise RuntimeError("No camera detected")
-            
-            self.sensor = CameraOpticalFlow(
-                camera_id=camera_id,
-                width=self.config.get('camera', {}).get('width', 640),
-                height=self.config.get('camera', {}).get('height', 480),
-                fps=self.config.get('camera', {}).get('fps', 30),
-                method=self.config.get('camera', {}).get('method', 'farneback')
-            )
-            self.sensor.start()
-        elif camera_type == 'analog_usb':
-            self.sensor = AnalogCameraFlow(
-                device_path=self.config.get('camera', {}).get('device', '/dev/video0'),
-                width=self.config.get('camera', {}).get('width', 720),
-                height=self.config.get('camera', {}).get('height', 480),
-                deinterlace=self.config.get('camera', {}).get('deinterlace', True)
-            )
-            self.sensor.start()
-        else:
-            raise ValueError(f"Unknown camera type: {camera_type}")
+        # Initialize camera-based motion source
+        self.sensor, self.camera_type = self._init_motion_source()
         
         # Initialize optical flow tracker
         self.tracker = OpticalFlowTracker(
@@ -173,9 +123,7 @@ class BetaflyStabilizerAdvanced:
         """Load configuration from file or use defaults"""
         default_config = {
             'sensor': {
-                'type': 'pmw3901',
-                'spi_bus': 0,
-                'spi_device': 0,
+                'type': 'csi_camera',
                 'rotation': 0
             },
             'tracker': {
@@ -238,6 +186,39 @@ class BetaflyStabilizerAdvanced:
                 self._deep_update(base_dict[key], value)
             else:
                 base_dict[key] = value
+
+    def _init_motion_source(self):
+        """Create and start the configured camera/analog motion source."""
+        sensor_cfg = self.config.get('sensor', {})
+        camera_cfg = self.config.get('camera', {})
+        camera_type = sensor_cfg.get('type', 'csi_camera')
+        logger.info(f"Initializing motion source: {camera_type}")
+
+        if camera_type == 'analog_usb':
+            sensor = AnalogCameraFlow(
+                device_path=camera_cfg.get('device', '/dev/video0'),
+                width=camera_cfg.get('width', 720),
+                height=camera_cfg.get('height', 480),
+                deinterlace=camera_cfg.get('deinterlace', True)
+            )
+        else:
+            camera_id = camera_cfg.get('device', 0)
+            if camera_id == 'auto' or camera_type == 'opencv_any':
+                camera_id = auto_detect_camera()
+                if camera_id is None:
+                    raise RuntimeError("No camera detected - connect a CSI/USB camera")
+            sensor = CameraOpticalFlow(
+                camera_id=camera_id,
+                width=camera_cfg.get('width', 640),
+                height=camera_cfg.get('height', 480),
+                fps=camera_cfg.get('fps', 30),
+                method=camera_cfg.get('method', 'farneback')
+            )
+
+        if hasattr(sensor, 'start'):
+            sensor.start()
+
+        return sensor, camera_type
     
     def _start_web_interface(self):
         """Start web interface in separate thread"""
@@ -273,10 +254,8 @@ class BetaflyStabilizerAdvanced:
         logger.info("Stopping Betafly stabilization system")
         self.running = False
         
-        # Stop sensor
-        if hasattr(self.sensor, 'shutdown'):
-            self.sensor.shutdown()
-        elif hasattr(self.sensor, 'stop'):
+        # Stop sensor/camera
+        if hasattr(self.sensor, 'stop'):
             self.sensor.stop()
         
         # Stop stick input

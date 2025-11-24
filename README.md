@@ -1,295 +1,246 @@
-# Betafly Optical Position Stabilization
+# Betafly Visual Position Stabilization
 
-A complete optical flow-based position stabilization system for the Betafly drone, optimized for Raspberry Pi Zero.
+Camera-only visual odometry and stabilization for the Betafly drone family. The system runs entirely on a Raspberry Pi Zero / Zero 2 and uses Raspberry Pi Camera Modules (IMX219/OV5647) or analog FPV cameras (via USB capture) to hold position without GPS or dedicated optical-flow sensors.
 
-## ✨ New Features
+## ✨ Highlights
 
-- **🌐 Web Interface**: Beautiful real-time dashboard for monitoring and configuration (port 8080)
-- **📷 Multiple Camera Support**: PMW3901, USB cameras, CSI cameras, and analog FPV cameras
-- **🎮 Manual Stick Inputs**: RC receiver integration with SBUS/PWM support and smooth blending
-- **🔧 Live Configuration**: Edit PID gains and settings through web GUI
-- **📊 Real-time Visualization**: Live position tracking and control output graphs
+- **🌐 Web Interface** – Real-time dashboard, charts, and configuration editor (port `8080`)
+- **📷 Camera-Only Tracking** – CSI (IMX219/OV5647), USB UVC, and analog FPV cameras supported out of the box
+- **🎮 Manual Stick Blending** – SBUS/PPM/PWM input with smooth mixing into stabilization commands
+- **🔧 Live Config Editing** – Tune PID, damping, camera, and loop settings from the browser
+- **📊 Rich Telemetry** – Position, velocity, surface quality, and control outputs streamed live
 
 ## Core Features
 
-- **Optical Flow Sensing**: Multiple sensor options for precise motion tracking
-- **Position Hold**: Maintains GPS-free position hold using visual odometry
-- **Velocity Damping**: Reduces drift and oscillations during flight
-- **PID Control**: Tunable PID controllers for X and Y axis stabilization
-- **Multiple Modes**: Off, velocity damping, and position hold modes
-- **Real-time Logging**: Optional CSV logging for flight data analysis
-- **Lightweight**: Optimized for Raspberry Pi Zero's limited resources
+- Visual odometry from any camera source (CSI/USB/analog)
+- Velocity damping and position-hold modes
+- Tunable PID + damping controller with logging
+- MAVLink/MSP/PWM output hooks for your flight controller
+- Designed for Pi Zero resource constraints (30–60 Hz loops on Zero, 100 Hz on Zero 2)
 
 ## Hardware Requirements
 
-### Required Components
-- **Raspberry Pi Zero W** (or Zero 2 W for better performance)
-- **Optical Flow Sensor** (choose one):
-  - PMW3901 Optical Flow Sensor (SPI) - Pimoroni or similar
-  - **Caddx Infra 256 (I2C)** - Recommended for production ⭐
-  - USB/CSI/Analog Camera (for computer vision approach)
-- **Flight Controller** (Betaflight, iNav, or ArduPilot compatible)
-- **Power Supply** (5V for Pi, shared with drone battery via BEC)
+### Required
 
-### Wiring Diagrams
+- Raspberry Pi Zero W or Zero 2 W (Zero 2 strongly recommended)
+- One supported camera:
+  - **CSI Camera Module** – Raspberry Pi Camera v1 (OV5647) or v2 (IMX219)
+  - **USB UVC Camera** – Any webcam that works with OpenCV
+  - **Analog FPV Camera + USB capture dongle**
+- Flight controller (Betaflight, iNav, ArduPilot, PX4, …)
+- Stable 5 V BEC for the Pi + camera/capture hardware
+- Pi-to-FC UART wiring (see below)
 
-#### Option 1: PMW3901 (SPI)
+### Optional
+
+- SBUS/PPM receiver connected to Pi for manual stick capture
+- External storage for long data-logging sessions
+
+## Camera Wiring
+
+### CSI Camera (IMX219 / OV5647)
+
+1. Power off the Pi.
+2. Lift the CSI latch, insert the 15‑pin ribbon with the **blue stiffener facing the Pi’s USB ports**, contacts toward the HDMI connector.
+3. Insert the ribbon into the camera module with the **blue stiffener facing away from the lens** and lock the latch.
+
 ```
-PMW3901 Sensor -> Raspberry Pi Zero
------------------------------------------
-VCC (3.3V)     -> Pin 1 (3.3V)
-GND            -> Pin 6 (GND)
-MOSI           -> Pin 19 (GPIO 10 / MOSI)
-MISO           -> Pin 21 (GPIO 9 / MISO)
-SCLK           -> Pin 23 (GPIO 11 / SCLK)
-CS             -> Pin 24 (GPIO 8 / CE0)
+CSI Ribbon Orientation
+┌──────────────────────────┐        ┌────────────────────────────┐
+│ Raspberry Pi Zero (CSI)  │========│ IMX219 / OV5647 Camera     │
+│ Contacts → HDMI connector│  FFC   │ Contacts → Lens PCB        │
+└──────────────────────────┘        └────────────────────────────┘
+Blue stiffener faces Pi USB ports.
 ```
 
-#### Option 2: Caddx Infra 256 (I2C) ⭐ Recommended
+Power, I²C, and differential lanes already ride inside the ribbon—no extra wires needed.
+
+### Analog FPV Camera + USB Capture
+
+Use any FPV cam (PAL/NTSC) and a UVC capture dongle (EasyCAP, Elgato, generic UVC). Power the camera from the same 5 V BEC as the Pi and share ground.
+
 ```
-Caddx Infra 256 -> Raspberry Pi Zero
------------------------------------------
-VCC (3.3V)      -> Pin 1 (3.3V)
-GND             -> Pin 6 (GND)
-SDA             -> Pin 3 (GPIO 2 / I2C SDA)
-SCL             -> Pin 5 (GPIO 3 / I2C SCL)
+Analog FPV Cam              USB Capture Dongle             Pi Zero
+──────────────              ──────────────────             ───────
+Video (yellow) ───────────▶ RCA/Signal input ──USB OTG──▶ USB data port
+Ground (black) ───────────▶ Ground ---------------------▶ Any Pi GND pin
+5 V (red) ────── BEC 5 V ─▶ Dongle + Camera              ▶ Pi 5 V rail
 ```
 
-**Benefits of Caddx Infra 256:**
-- ✅ Simpler wiring (4 wires vs 6)
-- ✅ Infrared technology (better in varied lighting)
-- ✅ Lower power consumption
-- ✅ I2C interface (easier debugging)
+Tips:
+- Keep the video lead short to reduce noise.
+- Enable deinterlacing in `config.json` when using analog sources (`camera.deinterlace: true`).
 
-**Important**: Ensure the sensor is mounted facing downward with adequate lighting for optical tracking.
+## Raspberry Pi Zero ↔ Flight Controller UART Wiring
+
+Use the Pi’s 3.3 V UART (`serial0`) and connect it to any spare flight-controller UART. Disable the serial console (the setup script does this by setting `enable_uart=1`).
+
+```
+Pi Zero Header (top view)
+┌────────────────────────────────────────────┐
+│ 3V3 (1)  SDA (3)  SCL (5)  ...  TXD (8)    │
+│ 5V  (2)  5V  (4)  GND (6)  ...  RXD (10)   │
+└────────────────────────────────────────────┘
+```
+
+Connection table:
+
+| Pi Pin | Signal                | Flight Controller Pad                |
+|--------|-----------------------|--------------------------------------|
+| Pin 6  | GND                   | Any ground                           |
+| Pin 8  | GPIO14 / TXD (3.3 V)  | RX pad of the target UART            |
+| Pin 10 | GPIO15 / RXD (3.3 V)  | TX pad of the same UART              |
+| Pin 4/2 (optional) | 5 V      | Only if you need to power accessories |
+
+⚠️ Do **not** feed 5 V/5.5 V UART signals into the Pi—logic is 3.3 V only. If you keep the Pi connected while plugging in USB, isolate the FC’s 5 V rail or use a diode/ideal switch so you do not back-feed the flight controller.
 
 ## Software Installation
 
-### 1. Prepare Raspberry Pi Zero
+### 1. Prepare the Pi
 
 ```bash
-# Update system
 sudo apt-get update
 sudo apt-get upgrade -y
-
-# Install Python 3 and pip (if not already installed)
-sudo apt-get install python3 python3-pip -y
-
-# Enable SPI interface
-sudo raspi-config
-# Navigate to: Interface Options -> SPI -> Enable
+sudo raspi-config # Enable Camera + Serial (Interface Options -> Camera / Serial)
 ```
 
-### 2. Clone Repository
+Alternatively run the provided script (handles camera + UART toggles automatically):
+
+```bash
+cd ~/betafly-stabilization
+chmod +x setup.sh
+./setup.sh
+```
+
+### 2. Clone & Install
 
 ```bash
 cd ~
 git clone https://github.com/yourusername/betafly-stabilization.git
 cd betafly-stabilization
-```
-
-### 3. Install Dependencies
-
-```bash
-# Install Python packages
+pip3 install --upgrade pip
 pip3 install -r requirements.txt
-
-# Make main script executable
-chmod +x betafly_stabilizer.py
 ```
 
-### 4. Test Sensor Connection
+### 3. Verify the Camera
 
 ```bash
-# Quick sensor test
-python3 -c "from optical_flow_sensor import PMW3901; s = PMW3901(); print('Sensor OK')"
+# CSI cameras (IMX219 / OV5647)
+libcamera-hello --list-cameras
+
+# USB / Analog capture (UVC)
+python3 - <<'PY'
+import cv2
+cap = cv2.VideoCapture(0)
+ret, frame = cap.read()
+print("Camera OK:", ret, "Resolution:", None if frame is None else frame.shape)
+cap.release()
+PY
 ```
 
-## Configuration
+## Configuration Overview
 
-Edit `config.json` to customize the system for your setup:
-
-### Key Parameters
+`config.json` ships with sensible defaults for CSI cameras:
 
 ```json
 {
   "sensor": {
-    "rotation": 0,  // Adjust based on sensor mounting orientation
+    "type": "csi_camera",
+    "rotation": 0
+  },
+  "camera": {
+    "device": 0,
+    "width": 640,
+    "height": 480,
+    "fps": 30,
+    "method": "farneback",
+    "deinterlace": true
   },
   "tracker": {
-    "initial_height": 0.5,  // Expected flight height in meters
-  },
-  "pid": {
-    "position_x": {
-      "kp": 0.5,  // Increase for more aggressive position correction
-      "ki": 0.1,  // Increase to eliminate steady-state error
-      "kd": 0.2   // Increase to reduce oscillations
-    }
+    "scale_factor": 0.001,
+    "initial_height": 0.5
   },
   "stabilizer": {
-    "max_tilt_angle": 15.0,  // Maximum tilt command in degrees
-    "velocity_damping": 0.3  // Damping factor (0-1)
-  },
-  "control": {
-    "update_rate_hz": 50  // Control loop frequency
+    "max_tilt_angle": 15.0,
+    "velocity_damping": 0.3
   }
 }
 ```
 
+> `sensor.type` options: `csi_camera`, `usb_camera`, `analog_usb`, `opencv_any` (auto-detect first camera).
+
 ## Usage
 
-### Quick Start with Web Interface
+### Quick Start (with Web UI)
 
 ```bash
-# Start advanced system with web interface (recommended)
 ./betafly_stabilizer_advanced.py
-
-# Access web interface at:
-# http://raspberrypi.local:8080
+# open http://raspberrypi.local:8080
 ```
 
-The web interface provides:
-- Real-time position and velocity display
-- Live control output visualization
-- Configuration editor
-- Mode switching controls
-- Stick input monitoring
-
-### Basic Command Line Usage
+### CLI Examples
 
 ```bash
-# Start with velocity damping (reduces drift)
+# Velocity damping only
 ./betafly_stabilizer.py --mode velocity_damping
 
-# Start advanced system with all features
-./betafly_stabilizer_advanced.py --mode position_hold
+# Advanced stack, explicit config and logging
+./betafly_stabilizer_advanced.py --config config.json --log --mode position_hold
 
-# Use custom config file
-./betafly_stabilizer_advanced.py --config my_config.json
-
-# Enable data logging
-./betafly_stabilizer_advanced.py --log --mode position_hold
-
-# Disable web interface
+# Run advanced stack without the web UI
 ./betafly_stabilizer_advanced.py --no-web
 ```
 
-### Using Different Camera Types
+### Selecting Camera Types
 
-```bash
-# PMW3901 sensor (default)
-./betafly_stabilizer_advanced.py
+| Sensor Type    | How to configure                                   | Notes                                      |
+|----------------|----------------------------------------------------|--------------------------------------------|
+| `csi_camera`   | Default. Set `camera.device` to `0` or `auto`.     | Works with IMX219 / OV5647 using libcamera |
+| `usb_camera`   | Set device to `/dev/video0` or index `0`.          | Any UVC webcam                             |
+| `analog_usb`   | Device `/dev/video0`, enable `camera.deinterlace`. | FPV cam + USB capture dongle               |
+| `opencv_any`   | Set device to `"auto"` or leave blank.             | Automatically grabs the first working cam  |
 
-# USB camera
-# Edit config.json: "sensor": {"type": "usb_camera"}
-./betafly_stabilizer_advanced.py --config config.json
+## Flight Controller Integration
 
-# Analog camera via USB capture card
-# Edit config.json: "sensor": {"type": "analog_usb"}
-./betafly_stabilizer_advanced.py --config config.json
-```
+1. Wire Pi TX/RX as described earlier.
+2. In Betaflight/iNav: assign an unused UART for MSP or custom protocol; disable “Serial RX”.
+3. In `config.json`, set:
+   ```json
+   "output": {
+     "interface": "msp",   // or "mavlink"
+     "port": "/dev/serial0",
+     "baudrate": 115200
+   }
+   ```
+4. Implement `_send_corrections` (currently a stub) with MST/MAVLink messages suited to your FC.
 
-### Command Line Options
+## Tuning & Calibration
 
-```
--c, --config FILE       Configuration file (JSON)
--m, --mode MODE         Initial mode: off, velocity_damping, position_hold
--l, --log              Enable CSV data logging
--v, --verbose          Enable verbose logging
-```
+1. **Verify visual flow** – Start with `./betafly_stabilizer_advanced.py --log`, move the drone by hand, and check the web UI chart plus `surface_quality` (>50 indoors, >100 outdoors).
+2. **Set height** – Adjust the web slider to match hover altitude so the tracker scales pixel flow correctly.
+3. **Tune velocity damping** – Increase `stabilizer.velocity_damping` until drift slows but oscillations stay tame.
+4. **Tune PID** – Increment `kp`, then `kd`, then introduce a small `ki`. Use the live chart to avoid overshoot.
 
-### Operating Modes
-
-1. **Off**: No stabilization (pass-through)
-2. **Velocity Damping**: Reduces drift by opposing velocity
-3. **Position Hold**: Maintains position at the point where mode was activated
-
-## Integration with Flight Controller
-
-The system outputs pitch and roll correction angles that need to be sent to your flight controller.
-
-### Option 1: MAVLink (Recommended)
-
-For ArduPilot or PX4:
-- Connect Pi serial to FC telemetry port
-- Set `"interface": "mavlink"` in config
-- System sends `SET_POSITION_TARGET_LOCAL_NED` messages
-
-### Option 2: MSP Protocol
-
-For Betaflight/iNav:
-- Connect Pi serial to FC UART
-- Set `"interface": "msp"` in config
-- Implement MSP message handling in `_send_corrections()`
-
-### Option 3: PWM Override
-
-- Connect Pi GPIO to FC receiver inputs
-- Set `"interface": "pwm"` in config
-- Use pigpio library for PWM generation
-
-## Tuning Guide
-
-### Step 1: Verify Optical Flow
-
-1. Start system with logging enabled
-2. Manually move drone and observe position tracking
-3. Ensure `surface_quality` (squal) stays above 50
-
-### Step 2: Tune Velocity Damping
-
-1. Start in velocity_damping mode
-2. Adjust `velocity_damping` factor (0.1 to 0.5)
-3. Higher values = more aggressive damping
-
-### Step 3: Tune Position Hold
-
-1. Start with conservative PID gains
-2. Increase Kp until position holds with minimal error
-3. Add Kd to reduce oscillations
-4. Add small Ki to eliminate steady-state error
-
-### Tuning Tips
-
-- **Too oscillatory?** Decrease Kp, increase Kd
-- **Too slow to respond?** Increase Kp
-- **Steady-state error?** Increase Ki (but keep small!)
-- **Drifting away?** Check sensor mounting and height setting
+Troubleshooting tips:
+- CSI cameras: run `libcamera-hello` if no frames arrive.
+- USB/Analog cameras: `ls /dev/video*` and ensure the capture dongle enumerates as UVC.
+- Surface quality low? Increase lighting, add texture (matte tape) under the drone, or raise height.
 
 ## Performance Optimization
 
-### For Raspberry Pi Zero
+- **Pi Zero W** – 30–40 Hz loop, reduce resolution to 320×240, disable logging, overclock to 1 GHz if cooled.
+- **Pi Zero 2 W** – 60–100 Hz loop, 640×480 video, simultaneous logging and web UI.
+- Use Farneback for analog/camera noise robustness; Lucas–Kanade saves CPU for textured indoor floors.
 
-The Pi Zero is single-core and slower, so:
+## Data Logging
 
-1. **Reduce update rate**: Try 30-40 Hz instead of 50 Hz
-2. **Disable logging**: Reduces CPU and SD card writes
-3. **Use lightweight OS**: Raspberry Pi OS Lite (no desktop)
-4. **Overclock safely**: Add to `/boot/config.txt`:
-   ```
-   arm_freq=1000
-   over_voltage=2
-   ```
+Set `"logging.enabled": true` or pass `--log`. CSV columns:
 
-### For Raspberry Pi Zero 2 W
+- `time`, `pos_x`, `pos_y`, `vel_x`, `vel_y`
+- `pitch_cmd`, `roll_cmd`, `mode`, `surface_quality`
+- Stick positions when stick mixing is enabled
 
-The quad-core Zero 2 W can handle:
-- 100 Hz update rate
-- Real-time logging
-- Additional sensor fusion (IMU integration)
-
-## Data Analysis
-
-Flight logs are saved as CSV files with columns:
-- `time`: Time in seconds
-- `pos_x`, `pos_y`: Position in meters
-- `vel_x`, `vel_y`: Velocity in m/s
-- `pitch_cmd`, `roll_cmd`: Control outputs in degrees
-- `mode`: Current stabilization mode
-- `squal`: Surface quality (0-255)
-
-Analyze with Python:
-
+Plot with pandas/matplotlib:
 ```python
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -298,37 +249,17 @@ df = pd.read_csv('flight_log.csv')
 plt.plot(df['time'], df['pos_x'], label='X position')
 plt.plot(df['time'], df['pos_y'], label='Y position')
 plt.legend()
+plt.xlabel('Time (s)')
+plt.ylabel('Position (m)')
 plt.show()
 ```
 
-## Troubleshooting
+## Troubleshooting Cheatsheet
 
-### Sensor Not Detected
-
-- Verify SPI is enabled: `lsmod | grep spi`
-- Check wiring connections
-- Test with `spidev` directly
-
-### Poor Tracking Quality
-
-- Ensure adequate lighting (avoid direct sunlight)
-- Check sensor is clean and unobstructed
-- Verify height setting matches actual height
-- Ensure surface below has visible texture (not blank/uniform)
-
-### Position Drift
-
-- Verify sensor rotation setting matches physical mounting
-- Check for vibrations (dampen sensor mounting)
-- Increase velocity damping factor
-- Ensure height is set correctly (scales optical flow)
-
-### Control Loop Running Slow
-
-- Reduce update rate in config
-- Disable data logging
-- Close unnecessary processes
-- Consider Pi Zero 2 W for better performance
+- **No camera detected** – check ribbon orientation, `dmesg | grep -i camera`, or `lsusb` for capture dongles.
+- **Motion feels mirrored** – set `sensor.rotation` to 90/180/270 matching the physical orientation.
+- **Web UI empty** – ensure `betafly_stabilizer_advanced.py` launches with web enabled or run `flask run`.
+- **UART spam on boot** – disable console on `/boot/cmdline.txt` (remove `console=serial0,115200`).
 
 ## System Architecture
 
@@ -340,126 +271,51 @@ plt.show()
         ┌─────────────┴─────────────┐
         │                           │
 ┌───────▼────────┐         ┌────────▼────────┐
-│ Optical Flow   │         │  Stabilization  │
-│    Tracking    │         │   Controller    │
-│                │         │                 │
-│ - PMW3901      │────────▶│ - Position PID  │
-│ - Position Est │         │ - Velocity Damp │
-│ - Velocity Est │         │ - Mode Control  │
+│ Camera Flow    │         │  Stabilization  │
+│  Estimation    │         │   Controller    │
+│ (CSI/USB/Anal) │────────▶│ PID + Damping   │
 └────────────────┘         └─────────┬───────┘
                                      │
                             ┌────────▼────────┐
                             │ Flight Control  │
                             │   Interface     │
-                            │                 │
-                            │ - MAVLink / MSP │
-                            │ - PWM Output    │
+                            │ MAVLink/MSP/PWM │
                             └─────────────────┘
 ```
 
-## API Reference
-
-### OpticalFlowTracker
-
-```python
-tracker = OpticalFlowTracker(sensor, scale_factor=0.001, height_m=0.5)
-pos_x, pos_y = tracker.update()  # Get current position
-vel_x, vel_y = tracker.get_velocity()  # Get velocity
-tracker.reset_position()  # Reset to origin
-tracker.set_height(new_height)  # Update height
-```
-
-### PositionStabilizer
-
-```python
-stabilizer = PositionStabilizer(x_gains, y_gains, max_tilt_angle=15.0)
-stabilizer.set_target_position(x, y)  # Set target
-stabilizer.enable()  # Enable position hold
-pitch, roll = stabilizer.update(current_x, current_y)  # Get corrections
-```
-
-### StabilizationController
-
-```python
-controller = StabilizationController(gains_x, gains_y, damping, max_tilt)
-controller.set_mode("position_hold")  # Set mode
-pitch, roll = controller.update(x, y, vx, vy)  # Update control
-controller.hold_current_position(x, y)  # Hold at position
-```
-
-## New Features Documentation
-
-For detailed information about new features:
-- **[FEATURES.md](FEATURES.md)** - Complete guide to web interface, camera support, and stick inputs
-- **[INSTALL.md](INSTALL.md)** - Installation and setup instructions
-
 ## Project Files
 
-### Core System
-- `betafly_stabilizer.py` - Original basic control script
-- `betafly_stabilizer_advanced.py` - **New!** Advanced system with all features
-- `optical_flow_sensor.py` - PMW3901 sensor interface
-- `camera_optical_flow.py` - **New!** Camera-based optical flow (USB/CSI/Analog)
-- `position_stabilizer.py` - PID control and stabilization algorithms
-- `stick_input.py` - **New!** RC receiver input handling (SBUS/PWM)
-- `web_interface.py` - **New!** Flask web server and API
-
-### Web Interface
-- `templates/index.html` - Web dashboard UI
-- `static/css/style.css` - Styling
-- `static/js/app.js` - Frontend JavaScript
-
-### Configuration & Setup
-- `config.json` - **Updated!** Configuration file with camera and stick input options
-- `setup.sh` - Automated setup script
-- `requirements.txt` - **Updated!** Python dependencies (includes OpenCV, Flask)
-
-### Testing & Utilities
-- `test_sensor.py` - Sensor testing utility
-
-### Documentation
-- `README.md` - This file
-- `FEATURES.md` - **New!** Detailed guide for new features
-- `INSTALL.md` - Installation guide
+- `betafly_stabilizer.py` – lightweight CLI stabilizer
+- `betafly_stabilizer_advanced.py` – web-enabled stack
+- `camera_optical_flow.py` – CSI/USB/analog motion extraction
+- `flow_tracker.py` – integrates motion into position/velocity
+- `position_stabilizer.py`, `stick_input.py`, `web_interface.py`
+- `templates/`, `static/` – web dashboard assets
+- `config.json`, `requirements.txt`, `setup.sh`
+- Documentation: `README.md`, `FEATURES.md`, `INSTALL.md`
 
 ## Contributing
 
-Contributions welcome! Areas for improvement:
-- Flight controller integration implementations
-- Additional sensor support (VL53L0X for height)
-- Kalman filter for sensor fusion
-- Auto-tuning algorithms
-- Ground effect compensation
-- Additional web interface features
-- Mobile app development
+PRs are welcome! High-impact areas:
+- Implementing MAVLink/MSP output inside `_send_corrections`
+- Automatic gain/height calibration
+- Sensor fusion with barometer/IMU data
+- Additional frontend visualizations
 
-## License
+## License & Safety
 
-MIT License - See LICENSE file for details
-
-## Safety Warning
-
-⚠️ **IMPORTANT**: This system is experimental. Always:
-- Test in a safe environment
-- Have manual control override ready
-- Start with low gains and gentle movements
-- Monitor battery voltage (Pi can brownout)
-- Never fly over people or property
-
-## Support
-
-For issues, questions, or contributions:
-- GitHub Issues: https://github.com/yourusername/betafly-stabilization/issues
-- Documentation: https://github.com/yourusername/betafly-stabilization/wiki
+MIT License (see `LICENSE`). This is experimental software:
+- Fly in open areas with a manual override ready.
+- Start with low gains and keep props off for bench testing.
+- Share ground between every board you connect.
 
 ## Credits
 
-Developed for the Betafly drone project using:
-- PMW3901 optical flow sensor
-- Raspberry Pi Zero platform
-- PID control theory
-- Visual odometry principles
+- Raspberry Pi Camera Module IMX219/OV5647 hardware team
+- OpenCV community for the optical-flow algorithms
+- Betaflight/iNav/PX4 developers for open flight stacks
+- Everyone in the Betafly community testing visual stabilization
 
 ---
 
-**Happy Flying! 🚁**
+**Happy flying! 🚁**

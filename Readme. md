@@ -1,106 +1,84 @@
-# Betafly Optical Position Stabilization
+# Betafly Visual Position Stabilization (Quick Notes)
 
-Advanced position stabilization with **web interface**, **multiple camera support**, and **manual stick inputs**.
+Camera-only position hold for Raspberry Pi Zero / Zero 2 with CSI, USB, or analog FPV cameras plus a simple web dashboard.
 
-## ✨ What's New
+## ✨ Highlights
 
-- 🌐 **Web Interface** - Real-time dashboard at http://raspberrypi.local:8080
-- 📷 **Camera Support** - USB, CSI, Analog FPV cameras, and PMW3901 sensor
-- 🎮 **RC Integration** - SBUS/PWM stick inputs with smooth blending
-- 🔧 **Live Config** - Edit settings through web GUI
+- 🌐 **Web Interface** – http://raspberrypi.local:8080 for live charts + config
+- 📷 **Camera-Only Tracking** – CSI (IMX219/OV5647), USB webcams, analog FPV via USB capture
+- 🎮 **RC Integration** – SBUS/PPM/PWM stick mixing
+- 🔧 **Live Config** – Tune PID, damping, and camera settings in-browser
 
 ## Quick Start
 
 ```bash
-# 1. Run setup script
-./setup.sh
-
-# 2. Test sensor (PMW3901 or camera)
-./test_sensor.py
-
-# 3. Start with web interface (recommended)
-./betafly_stabilizer_advanced.py
-
-# 4. Open browser to: http://raspberrypi.local:8080
+./setup.sh                               # installs deps, enables camera + UART
+./betafly_stabilizer_advanced.py         # launches stabilization + web UI
+# open http://raspberrypi.local:8080
 ```
 
-## Alternative: Basic Usage (No Web Interface)
+CLI-only mode (no web UI):
 
 ```bash
-# Original simple version
 ./betafly_stabilizer.py --mode velocity_damping
 ```
 
-## Documentation
+## Docs
 
-- **[README.md](README.md)** - Complete documentation and hardware setup
-- **[FEATURES.md](FEATURES.md)** - Guide to new features (web, cameras, sticks)
-- **[INSTALL.md](INSTALL.md)** - Detailed installation instructions
+- [README.md](README.md) – wiring diagrams, camera + UART guides
+- [INSTALL.md](INSTALL.md) – step-by-step setup
+- [FEATURES.md](FEATURES.md) – deep dive into web UI, camera tuning, and RC inputs
 
 ## Key Files
 
-### Main Scripts
-- `betafly_stabilizer_advanced.py` ⭐ - **Use this!** Full-featured version
-- `betafly_stabilizer.py` - Basic version (PMW3901 only)
-- `web_interface.py` - Web server (auto-started)
+- `betafly_stabilizer_advanced.py` – full stack + web server
+- `betafly_stabilizer.py` – lightweight CLI controller
+- `camera_optical_flow.py` – CSI/USB/analog motion extraction
+- `flow_tracker.py` – integrates motion to position/velocity
+- `position_stabilizer.py`, `stick_input.py`, `web_interface.py`
+- `config.json`, `requirements.txt`, `setup.sh`
+- Web assets in `templates/` and `static/`
 
-### Core Modules
-- `optical_flow_sensor.py` - PMW3901 sensor
-- `camera_optical_flow.py` - Camera-based optical flow
-- `position_stabilizer.py` - PID controllers
-- `stick_input.py` - RC receiver handling
+## Supported Motion Sources
 
-### Configuration
-- `config.json` - Main configuration file
-- `requirements.txt` - Python dependencies
+| Type         | Description                               | Config value           |
+|--------------|-------------------------------------------|------------------------|
+| CSI Camera   | Raspberry Pi Camera Module IMX219/OV5647  | `"csi_camera"`         |
+| USB Webcam   | Any UVC camera (`/dev/video*`)            | `"usb_camera"`         |
+| Analog FPV   | FPV cam + USB capture dongle              | `"analog_usb"`         |
+| Auto-detect  | First camera OpenCV can open              | `"opencv_any"`         |
 
-### Web Interface
-- `templates/index.html` - Dashboard UI
-- `static/css/style.css` - Styling
-- `static/js/app.js` - Frontend code
+Example `config.json` snippet:
 
-## Supported Sensors
-
-1. **PMW3901** - Dedicated optical flow sensor (SPI, original)
-2. **Caddx Infra 256** ⭐ - Infrared optical flow (I2C, recommended)
-3. **USB Camera** - Any USB webcam
-4. **CSI Camera** - Raspberry Pi Camera Module
-5. **Analog Camera** - FPV camera via USB capture card
-
-Configure in `config.json`:
 ```json
 {
-  "sensor": {
-    "type": "pmw3901"  // or "usb_camera", "analog_usb", etc.
-  }
+  "sensor": { "type": "csi_camera", "rotation": 0 },
+  "camera": { "device": 0, "width": 640, "height": 480, "fps": 30 }
 }
 ```
 
-## Web Interface Features
+## Web Interface at a Glance
 
-Access at `http://raspberrypi.local:8080`
+- Position + velocity plots
+- Surface-quality meter and camera type indicator
+- Mode switching (off / velocity_damping / position_hold)
+- Height slider and position reset
+- PID + control tuning tabs
+- Camera-specific settings (resolution, FPS, device, deinterlace)
+- RC stick visualization + failsafe indicator
 
-- 📊 Real-time position tracking (2D visualization)
-- 📈 Live velocity and control outputs
-- 🎛️ Mode switching (Off / Velocity Damping / Position Hold)
-- ⚙️ PID tuning interface
-- 📷 Camera configuration
-- 🎮 Stick input monitoring
-- 💾 Save configuration changes
-
-## RC Integration
-
-Supports SBUS and PWM protocols for manual control:
+## RC / Stick Input
 
 ```json
 {
   "stick_input": {
     "enabled": true,
-    "protocol": "sbus",  // or "pwm", "mock"
+    "protocol": "sbus",          // sbus, ppm, pwm, mock
     "device": "/dev/ttyAMA0",
-    "mix_ratio": 0.5  // 0=full stab, 1=full manual
+    "mix_ratio": 0.5,            // 0 = full stabilize, 1 = full manual
+    "mode_channel": 4
   }
 }
 ```
 
-Use RC switch to change modes in flight!
+Flip a switch to change modes mid-flight once your flight controller integration is complete.

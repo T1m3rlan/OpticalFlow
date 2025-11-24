@@ -1,6 +1,12 @@
 // Betafly Web Interface
 let config = {};
 let updateInterval = null;
+const CAMERA_LABELS = {
+    csi_camera: 'CSI Camera (IMX219/OV5647)',
+    usb_camera: 'USB Camera (UVC)',
+    analog_usb: 'Analog Camera (USB Capture)',
+    opencv_any: 'Auto-detected Camera'
+};
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', () => {
@@ -61,9 +67,11 @@ async function loadConfig() {
 function updateConfigUI() {
     // Sensor tab
     if (config.sensor) {
+        document.getElementById('camera-type-select').value = config.sensor.type || 'csi_camera';
         document.getElementById('sensor-rotation').value = config.sensor.rotation || 0;
         document.getElementById('scale-factor').value = config.tracker?.scale_factor || 0.001;
     }
+    updateCameraType();
     
     // PID tab
     if (config.pid) {
@@ -90,6 +98,9 @@ function updateConfigUI() {
         document.getElementById('camera-width').value = config.camera.width || 640;
         document.getElementById('camera-height').value = config.camera.height || 480;
         document.getElementById('camera-fps').value = config.camera.fps || 30;
+        document.getElementById('camera-deinterlace').value = String(
+            config.camera.deinterlace !== undefined ? config.camera.deinterlace : true
+        );
     }
 }
 
@@ -98,8 +109,6 @@ async function saveConfig() {
     // Build config object from UI
     const newConfig = {
         sensor: {
-            spi_bus: config.sensor?.spi_bus || 0,
-            spi_device: config.sensor?.spi_device || 0,
             rotation: parseInt(document.getElementById('sensor-rotation').value),
             type: document.getElementById('camera-type-select').value
         },
@@ -130,7 +139,8 @@ async function saveConfig() {
             device: document.getElementById('camera-device').value,
             width: parseInt(document.getElementById('camera-width').value),
             height: parseInt(document.getElementById('camera-height').value),
-            fps: parseInt(document.getElementById('camera-fps').value)
+            fps: parseInt(document.getElementById('camera-fps').value),
+            deinterlace: document.getElementById('camera-deinterlace').value === 'true'
         },
         logging: config.logging || { enabled: false, file: 'flight_log.csv' },
         output: config.output || { interface: 'mavlink', port: '/dev/ttyAMA0', baudrate: 115200 }
@@ -163,7 +173,8 @@ async function updateStatus() {
         modeBadge.className = 'mode-badge ' + state.mode;
         
         // Update camera type
-        document.getElementById('camera-type').textContent = state.camera_type.toUpperCase();
+        const cameraLabel = CAMERA_LABELS[state.camera_type] || state.camera_type;
+        document.getElementById('camera-type').textContent = cameraLabel;
         
         // Update surface quality
         const quality = state.surface_quality;
@@ -313,20 +324,19 @@ function showTab(tabName) {
 function updateCameraType() {
     const cameraType = document.getElementById('camera-type-select').value;
     console.log('Camera type changed to:', cameraType);
-    
-    // Show/hide I2C address field for Caddx
-    const i2cGroup = document.getElementById('i2c-address-group');
-    if (cameraType === 'caddx_infra256') {
-        i2cGroup.style.display = 'block';
-    } else {
-        i2cGroup.style.display = 'none';
-    }
-    
-    // Show/hide camera settings based on type
+
+    // Camera settings are always relevant for camera sources
     const cameraTab = document.getElementById('camera-tab');
-    if (cameraType === 'pmw3901' || cameraType === 'caddx_infra256') {
-        cameraTab.style.display = 'none';
+    cameraTab.style.display = 'block';
+
+    const deviceField = document.getElementById('camera-device');
+    if (cameraType === 'csi_camera') {
+        deviceField.placeholder = '/dev/video0 (CSI camera via libcamera)';
+    } else if (cameraType === 'analog_usb') {
+        deviceField.placeholder = '/dev/video1 (USB capture adapter)';
+    } else if (cameraType === 'opencv_any') {
+        deviceField.placeholder = 'auto';
     } else {
-        cameraTab.style.display = 'block';
+        deviceField.placeholder = '/dev/video0';
     }
 }

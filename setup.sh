@@ -33,15 +33,12 @@ sudo apt-get install -y \
     python3-setuptools \
     git
 
-# Enable SPI
-echo "[3/6] Enabling SPI interface..."
-if ! grep -q "^dtparam=spi=on" /boot/config.txt; then
-    echo "dtparam=spi=on" | sudo tee -a /boot/config.txt
-    echo "SPI enabled (reboot required)"
-    REBOOT_REQUIRED=1
-else
-    echo "SPI already enabled"
-fi
+# Enable camera and UART interfaces
+echo "[3/6] Enabling camera and UART interfaces..."
+sudo raspi-config nonint set_config_var start_x 1 /boot/config.txt
+sudo raspi-config nonint set_config_var enable_uart 1 /boot/config.txt
+echo "Camera interface and UART enabled (reboot recommended)"
+REBOOT_REQUIRED=1
 
 # Install Python dependencies
 echo "[4/6] Installing Python packages..."
@@ -54,9 +51,9 @@ chmod +x betafly_stabilizer.py
 
 # Test installation
 echo "[6/6] Testing installation..."
-python3 -c "import spidev; print('✓ spidev installed')"
-python3 -c "from optical_flow_sensor import PMW3901; print('✓ optical_flow_sensor OK')"
-python3 -c "from position_stabilizer import StabilizationController; print('✓ position_stabilizer OK')"
+python3 -c "import cv2; print('✓ OpenCV available')"
+python3 -c "import camera_optical_flow; print('✓ camera_optical_flow import OK')"
+python3 -c "from flow_tracker import OpticalFlowTracker; print('✓ flow_tracker OK')"
 
 echo ""
 echo "================================================"

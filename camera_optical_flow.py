@@ -190,7 +190,7 @@ class CameraOpticalFlow:
         flow_x = np.mean(flow_center[:, :, 0])
         flow_y = np.mean(flow_center[:, :, 1])
         
-        # Scale to match PMW3901 output range
+        # Scale to match historical sensor output range
         scale = 50.0
         flow_x *= scale
         flow_y *= scale
@@ -241,7 +241,7 @@ class CameraOpticalFlow:
         # Update points for next iteration
         self.prev_points = good_new.reshape(-1, 1, 2)
         
-        # Scale to match PMW3901 output range
+        # Scale to match historical sensor output range
         scale = 10.0
         flow_x *= scale
         flow_y *= scale
@@ -251,7 +251,7 @@ class CameraOpticalFlow:
     def get_surface_quality(self) -> int:
         """
         Estimate surface quality based on feature detectability
-        Returns value 0-255 (similar to PMW3901)
+        Returns value 0-255 (similar to legacy optical flow sensors)
         """
         with self.frame_lock:
             if self.current_frame is None:

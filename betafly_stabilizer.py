@@ -15,10 +15,15 @@ import logging
 from typing import Optional
 import json
 
-from optical_flow_sensor import PMW3901, OpticalFlowTracker
+from camera_optical_flow import (
+    CameraOpticalFlow,
+    AnalogCameraFlow,
+    auto_detect_camera,
+)
+from flow_tracker import OpticalFlowTracker
 from position_stabilizer import (
-    StabilizationController, 
-    PIDGains
+    StabilizationController,
+    PIDGains,
 )
 
 # Configure logging
@@ -44,14 +49,10 @@ class BetaflyStabilizer:
         # Load configuration
         self.config = self._load_config(config_file)
         
-        # Initialize optical flow sensor
-        logger.info("Initializing optical flow sensor...")
-        self.sensor = PMW3901(
-            spi_bus=self.config['sensor']['spi_bus'],
-            spi_device=self.config['sensor']['spi_device'],
-            rotation=self.config['sensor']['rotation']
-        )
-        
+        # Initialize camera-based motion source
+        self.sensor, self.camera_type = self._init_motion_source()
+        logger.info("Camera-based motion source initialized")
+
         # Initialize optical flow tracker
         self.tracker = OpticalFlowTracker(
             sensor=self.sensor,
@@ -94,8 +95,7 @@ class BetaflyStabilizer:
         """Load configuration from file or use defaults"""
         default_config = {
             'sensor': {
-                'spi_bus': 0,
-                'spi_device': 0,
+                'type': 'csi_camera',  # csi_camera, usb_camera, analog_usb, opencv_any
                 'rotation': 0
             },
             'tracker': {
@@ -164,8 +164,9 @@ class BetaflyStabilizer:
         logger.info("Stopping Betafly stabilization system")
         self.running = False
         
-        # Shutdown sensor
-        self.sensor.shutdown()
+        # Stop camera capture
+        if hasattr(self.sensor, 'stop'):
+            self.sensor.stop()
         
         # Close log file
         if self.log_file:
@@ -227,6 +228,40 @@ class BetaflyStabilizer:
                 time.sleep(sleep_time)
             elif loop_count % 100 == 0:
                 logger.warning(f"Control loop running slow: {loop_time*1000:.1f}ms")
+
+    def _init_motion_source(self):
+        """Create and start the configured camera/analog motion source."""
+        sensor_cfg = self.config.get('sensor', {})
+        camera_cfg = self.config.get('camera', {})
+        camera_type = sensor_cfg.get('type', 'csi_camera')
+        logger.info(f"Initializing motion source: {camera_type}")
+
+        if camera_type == 'analog_usb':
+            sensor = AnalogCameraFlow(
+                device_path=camera_cfg.get('device', '/dev/video0'),
+                width=camera_cfg.get('width', 720),
+                height=camera_cfg.get('height', 480),
+                deinterlace=camera_cfg.get('deinterlace', True)
+            )
+        else:
+            camera_id = camera_cfg.get('device', 0)
+            if camera_type == 'opencv_any':
+                detected = auto_detect_camera()
+                if detected is None:
+                    raise RuntimeError("No camera detected - connect a CSI/USB camera")
+                camera_id = detected
+            sensor = CameraOpticalFlow(
+                camera_id=camera_id,
+                width=camera_cfg.get('width', 640),
+                height=camera_cfg.get('height', 480),
+                fps=camera_cfg.get('fps', 30),
+                method=camera_cfg.get('method', 'farneback')
+            )
+
+        if hasattr(sensor, 'start'):
+            sensor.start()
+
+        return sensor, camera_type
     
     def _send_corrections(self, pitch: float, roll: float):
         """
