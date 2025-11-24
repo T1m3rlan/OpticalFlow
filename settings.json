@@ -1,0 +1,18 @@
+{
+    "serial_port": "/dev/ttyS0",
+    "baud_rate": 115200,
+    "camera_index": 0,
+    "camera_width": 320,
+    "camera_height": 240,
+    "camera_framerate": 30,
+    "max_corners": 100,
+    "quality_level": 0.3,
+    "min_distance": 7,
+    "block_size": 7,
+    "p_gain": 0.1,
+    "i_gain": 0.0,
+    "d_gain": 0.01,
+    "vel_scale": 0.1,
+    "rc_mid": 1500,
+    "rc_deadband": 20
+}

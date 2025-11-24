@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Betafly Settings</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; max-width: 600px; margin: 0 auto; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input, select { width: 100%; padding: 8px; box-sizing: border-box; }
+        button { padding: 10px 20px; background-color: #007bff; color: white; border: none; cursor: pointer; }
+        button:hover { background-color: #0056b3; }
+        .message { padding: 10px; background-color: #d4edda; color: #155724; margin-bottom: 20px; display: none; }
+    </style>
+</head>
+<body>
+    <h1>Stabilization Settings</h1>
+    
+    <div id="message" class="message">Settings saved successfully!</div>
+
+    <form id="settingsForm">
+        <h2>Connection</h2>
+        <div class="form-group">
+            <label for="serial_port">Serial Port</label>
+            <input type="text" id="serial_port" name="serial_port">
+        </div>
+        <div class="form-group">
+            <label for="baud_rate">Baud Rate</label>
+            <input type="number" id="baud_rate" name="baud_rate">
+        </div>
+
+        <h2>Camera</h2>
+        <div class="form-group">
+            <label for="camera_index">Camera Index/Path</label>
+            <input type="text" id="camera_index" name="camera_index" placeholder="0 or /dev/video0">
+        </div>
+        <div class="form-group">
+            <label for="camera_width">Width</label>
+            <input type="number" id="camera_width" name="camera_width">
+        </div>
+        <div class="form-group">
+            <label for="camera_height">Height</label>
+            <input type="number" id="camera_height" name="camera_height">
+        </div>
+
+        <h2>PID & Control</h2>
+        <div class="form-group">
+            <label for="p_gain">P Gain</label>
+            <input type="number" step="0.001" id="p_gain" name="p_gain">
+        </div>
+        <div class="form-group">
+            <label for="i_gain">I Gain</label>
+            <input type="number" step="0.001" id="i_gain" name="i_gain">
+        </div>
+        <div class="form-group">
+            <label for="d_gain">D Gain</label>
+            <input type="number" step="0.001" id="d_gain" name="d_gain">
+        </div>
+        <div class="form-group">
+            <label for="vel_scale">Velocity Scale (Stick Input)</label>
+            <input type="number" step="0.01" id="vel_scale" name="vel_scale">
+        </div>
+
+        <button type="submit">Save Settings</button>
+    </form>
+
+    <script>
+        // Load settings on page load
+        fetch('/api/settings')
+            .then(response => response.json())
+            .then(data => {
+                for (const key in data) {
+                    const el = document.getElementById(key);
+                    if (el) {
+                        el.value = data[key];
+                    }
+                }
+            });
+
+        // Handle form submission
+        document.getElementById('settingsForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(e.target);
+            const data = {};
+            formData.forEach((value, key) => {
+                data[key] = value;
+            });
+
+            fetch('/api/settings', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(data),
+            })
+            .then(response => response.json())
+            .then(result => {
+                const msg = document.getElementById('message');
+                msg.style.display = 'block';
+                setTimeout(() => msg.style.display = 'none', 3000);
+            });
+        });
+    </script>
+</body>
+</html>
