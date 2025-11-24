@@ -5,7 +5,7 @@ Supports PMW3901 and Caddx Infra 256 optical flow sensors for position tracking
 
 import time
 import spidev
-from typing import Tuple, Optional
+from typing import Tuple, Optional, Union
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -17,6 +17,9 @@ try:
     CADDX_AVAILABLE = True
 except ImportError:
     CADDX_AVAILABLE = False
+    # Create a dummy class for type hinting if not available
+    class CaddxInfra256:
+        pass
     logger.warning("Caddx Infra 256 support not available")
 
 
@@ -163,12 +166,12 @@ class OpticalFlowTracker:
     Higher-level optical flow tracking with position estimation
     """
     
-    def __init__(self, sensor: PMW3901, scale_factor: float = 0.001, height_m: float = 0.5):
+    def __init__(self, sensor: Union[PMW3901, CaddxInfra256], scale_factor: float = 0.001, height_m: float = 0.5):
         """
         Initialize optical flow tracker
         
         Args:
-            sensor: PMW3901 sensor instance
+            sensor: PMW3901 or CaddxInfra256 sensor instance
             scale_factor: Conversion factor from sensor units to meters
             height_m: Height above ground in meters (affects scale)
         """
