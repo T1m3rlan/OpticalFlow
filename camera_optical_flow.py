@@ -1,6 +1,6 @@
 """
 Camera-based Optical Flow for Analog and Digital Cameras
-Supports USB cameras, CSI cameras, and analog cameras via capture cards
+Supports USB cameras, CSI cameras (IMX219, OV5647), and analog cameras via capture cards
 """
 
 import cv2
@@ -361,6 +361,104 @@ class AnalogCameraFlow:
     def get_surface_quality(self) -> int:
         """Get surface quality"""
         return self.optical_flow.get_surface_quality()
+
+
+class CameraFlowTracker:
+    """
+    Higher-level camera-based optical flow tracking with position estimation
+    Compatible with OpticalFlowTracker interface
+    """
+    
+    def __init__(self, sensor, scale_factor: float = 0.001, height_m: float = 0.5):
+        """
+        Initialize camera flow tracker
+        
+        Args:
+            sensor: CameraOpticalFlow or AnalogCameraFlow instance
+            scale_factor: Conversion factor from flow units to meters
+            height_m: Height above ground in meters (affects scale)
+        """
+        self.sensor = sensor
+        self.scale_factor = scale_factor
+        self.height_m = height_m
+        
+        # Position tracking
+        self.pos_x = 0.0
+        self.pos_y = 0.0
+        
+        # Velocity tracking
+        self.vel_x = 0.0
+        self.vel_y = 0.0
+        
+        self.last_update_time = time.time()
+        
+        # Moving average filter for noise reduction
+        self.velocity_history_x = []
+        self.velocity_history_y = []
+        self.filter_window = 5
+    
+    def update(self) -> Tuple[float, float]:
+        """
+        Update position estimate based on camera optical flow
+        
+        Returns:
+            Current estimated position (x, y) in meters
+        """
+        current_time = time.time()
+        dt = current_time - self.last_update_time
+        
+        if dt < 0.001:  # Avoid division by zero
+            return (self.pos_x, self.pos_y)
+        
+        # Get raw motion from camera
+        delta_x, delta_y = self.sensor.get_motion()
+        
+        # Convert to velocity (m/s) accounting for height
+        # Optical flow scales with height above ground
+        scale = self.scale_factor * self.height_m
+        self.vel_x = (delta_x * scale) / dt
+        self.vel_y = (delta_y * scale) / dt
+        
+        # Apply moving average filter
+        self.velocity_history_x.append(self.vel_x)
+        self.velocity_history_y.append(self.vel_y)
+        
+        if len(self.velocity_history_x) > self.filter_window:
+            self.velocity_history_x.pop(0)
+            self.velocity_history_y.pop(0)
+        
+        filtered_vel_x = sum(self.velocity_history_x) / len(self.velocity_history_x)
+        filtered_vel_y = sum(self.velocity_history_y) / len(self.velocity_history_y)
+        
+        # Integrate velocity to get position
+        self.pos_x += filtered_vel_x * dt
+        self.pos_y += filtered_vel_y * dt
+        
+        self.last_update_time = current_time
+        
+        return (self.pos_x, self.pos_y)
+    
+    def get_velocity(self) -> Tuple[float, float]:
+        """Get current velocity estimate in m/s"""
+        filtered_vel_x = sum(self.velocity_history_x) / max(len(self.velocity_history_x), 1)
+        filtered_vel_y = sum(self.velocity_history_y) / max(len(self.velocity_history_y), 1)
+        return (filtered_vel_x, filtered_vel_y)
+    
+    def reset_position(self):
+        """Reset position to origin"""
+        self.pos_x = 0.0
+        self.pos_y = 0.0
+        self.velocity_history_x.clear()
+        self.velocity_history_y.clear()
+        logger.info("Position reset to origin")
+    
+    def set_height(self, height_m: float):
+        """Update height above ground for accurate scaling"""
+        self.height_m = height_m
+    
+    def get_surface_quality(self) -> int:
+        """Get surface quality from camera"""
+        return self.sensor.get_surface_quality()
 
 
 def auto_detect_camera() -> Optional[int]:

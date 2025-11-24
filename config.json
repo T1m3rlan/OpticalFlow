@@ -1,12 +1,13 @@
 {
-  "sensor": {
-    "type": "pmw3901",
-    "spi_bus": 0,
-    "spi_device": 0,
-    "i2c_bus": 1,
-    "i2c_address": 41,
-    "rotation": 0,
-    "comment": "type: pmw3901, caddx_infra256, usb_camera, csi_camera, analog_usb, opencv_any. i2c_address: 41 (0x29 default for Caddx)"
+  "camera": {
+    "type": "usb_camera",
+    "device": 0,
+    "width": 640,
+    "height": 480,
+    "fps": 30,
+    "method": "farneback",
+    "deinterlace": true,
+    "comment": "type: usb_camera, csi_camera, analog_usb, opencv_any. device: 0 or /dev/video0 or 'auto'. method: farneback or lucas_kanade"
   },
   "tracker": {
     "scale_factor": 0.001,

@@ -28,7 +28,7 @@ system_state = {
     'surface_quality': 0,
     'height': 0.5,
     'stick_inputs': {'pitch': 0, 'roll': 0, 'throttle': 0, 'yaw': 0},
-    'camera_type': 'pmw3901',
+    'camera_type': 'usb_camera',
     'last_update': time.time()
 }
 
@@ -137,11 +137,9 @@ def send_command():
 def get_camera_types():
     """Get available camera types"""
     camera_types = [
-        {'id': 'pmw3901', 'name': 'PMW3901 Optical Flow Sensor (SPI)'},
-        {'id': 'caddx_infra256', 'name': 'Caddx Infra 256 (I2C)'},
         {'id': 'usb_camera', 'name': 'USB Camera (OpenCV)'},
-        {'id': 'csi_camera', 'name': 'Raspberry Pi Camera (CSI)'},
-        {'id': 'analog_usb', 'name': 'Analog Camera via USB Capture'},
+        {'id': 'csi_camera', 'name': 'Raspberry Pi Camera Module (CSI) - IMX219/OV5647'},
+        {'id': 'analog_usb', 'name': 'Analog Camera via USB Capture Card'},
         {'id': 'opencv_any', 'name': 'Any OpenCV Compatible Camera'}
     ]
     return jsonify({'success': True, 'cameras': camera_types})
@@ -149,7 +147,7 @@ def get_camera_types():
 
 def validate_config(config):
     """Validate configuration structure"""
-    required_keys = ['sensor', 'tracker', 'pid', 'stabilizer', 'control']
+    required_keys = ['camera', 'tracker', 'pid', 'stabilizer', 'control']
     return all(key in config for key in required_keys)
 
 

@@ -2,18 +2,33 @@
 
 ## Hardware Setup
 
-### 1. Connect PMW3901 Sensor to Raspberry Pi Zero
+### 1. Connect Camera to Raspberry Pi Zero
 
-| PMW3901 Pin | Pi Zero Pin | Pin Number | Function |
-|-------------|-------------|------------|----------|
-| VCC         | 3.3V        | Pin 1      | Power    |
-| GND         | Ground      | Pin 6      | Ground   |
-| MOSI        | GPIO 10     | Pin 19     | SPI MOSI |
-| MISO        | GPIO 9      | Pin 21     | SPI MISO |
-| SCLK        | GPIO 11     | Pin 23     | SPI CLK  |
-| CS          | GPIO 8      | Pin 24     | SPI CE0  |
+#### Option A: Raspberry Pi Camera Module (Recommended)
 
-**Mounting**: Sensor should face downward with clear view of ground surface.
+**Connection Steps:**
+1. Locate the CSI connector on Raspberry Pi Zero (between HDMI and audio jack)
+2. Lift the black plastic tab on the CSI connector
+3. Insert the camera ribbon cable with the contacts facing away from the Ethernet port
+4. Push the black tab down to lock the cable in place
+
+**Pinout (for reference - handled automatically by ribbon cable):**
+- Camera Module uses 15-pin CSI connector
+- All connections handled by ribbon cable - no manual wiring needed
+
+**Mounting**: Camera should face downward with clear view of ground surface.
+
+#### Option B: USB Camera
+
+**Connection:**
+- Plug USB webcam into Raspberry Pi Zero USB port
+- Use USB OTG adapter if needed for Pi Zero
+
+#### Option C: Analog Camera with USB Capture Card
+
+**Connection:**
+- Connect analog FPV camera video output to USB capture card
+- Plug USB capture card into Raspberry Pi Zero USB port
 
 ### 2. Power Supply
 
@@ -47,9 +62,15 @@ sudo apt-get update && sudo apt-get upgrade -y
 # 2. Install dependencies
 sudo apt-get install -y python3 python3-pip python3-dev git
 
-# 3. Enable SPI
+# 3. Enable Camera Interface (for CSI cameras)
 sudo raspi-config
-# Interface Options -> SPI -> Enable
+# Interface Options -> Camera -> Enable
+
+# 4. Enable Serial Port (for FC communication)
+sudo raspi-config
+# Interface Options -> Serial Port
+# - Login shell over serial: NO
+# - Serial port hardware: YES
 
 # 4. Install Python packages
 pip3 install -r requirements.txt
@@ -63,33 +84,44 @@ sudo reboot
 
 ## Verification
 
-### 1. Test Sensor Connection
+### 1. Test Camera Connection
+
+**For CSI Camera (Raspberry Pi Camera Module):**
+```bash
+# Test camera capture
+raspistill -o test.jpg
+
+# Or using libcamera (Raspberry Pi OS Bullseye+)
+libcamera-still -o test.jpg
+```
+
+**For USB Camera:**
+```bash
+# List available video devices
+ls /dev/video*
+
+# Test camera with OpenCV
+python3 -c "import cv2; cap = cv2.VideoCapture(0); print('Camera OK:', cap.isOpened()); cap.release()"
+```
+
+### 2. Test Camera Optical Flow
 
 ```bash
-./test_sensor.py --test connection
+# Start the stabilizer and observe camera feed
+./betafly_stabilizer_advanced.py --mode velocity_damping
 ```
 
-Expected output:
-```
-✓ Sensor initialized successfully
-✓ Product ID: 0x49
-```
+Move the drone and verify position tracking in the web interface.
 
-### 2. Test Motion Detection
+### 3. Test Serial Connection to Flight Controller
 
 ```bash
-./test_sensor.py --test motion --duration 5
+# Test serial output
+echo "test" > /dev/ttyAMA0
+
+# Monitor serial input (if FC is sending data)
+cat /dev/ttyAMA0
 ```
-
-Move the sensor and verify motion values change.
-
-### 3. Test Position Tracking
-
-```bash
-./test_sensor.py --test tracking --duration 10
-```
-
-Move sensor in a pattern and observe position integration.
 
 ## Configuration
 
@@ -101,9 +133,11 @@ nano config.json
 
 ### 2. Key Settings to Adjust
 
-**Sensor Rotation**: Match physical mounting
+**Camera Type**: Select your camera
 ```json
-"rotation": 0  // 0, 90, 180, or 270 degrees
+"camera": {
+  "type": "csi_camera"  // or "usb_camera", "analog_usb"
+}
 ```
 
 **Flight Height**: Expected altitude above ground
@@ -160,38 +194,49 @@ sudo journalctl -u betafly-stabilizer.service -f
 
 ## Flight Controller Integration
 
-### Option A: Serial Connection (MAVLink/MSP)
+### Serial Connection Setup
 
-1. Connect Pi TX to FC RX (telemetry/UART port)
-2. Update config:
+**Hardware Wiring:**
+- Raspberry Pi Zero GPIO 14 (TXD) → Flight Controller RX pad
+- Raspberry Pi Zero GPIO 15 (RXD) → Flight Controller TX pad
+- Raspberry Pi Zero GND → Flight Controller GND
+
+**Physical Pin Locations:**
+- Pin 8 (GPIO 14 / TXD) → FC RX
+- Pin 10 (GPIO 15 / RXD) → FC TX
+- Pin 6 (GND) → FC GND
+
+**Software Configuration:**
+
+1. Enable serial port (if not already done):
+```bash
+sudo raspi-config
+# Interface Options -> Serial Port
+# - Login shell over serial: NO
+# - Serial port hardware: YES
+```
+
+2. Update config.json:
 ```json
 "output": {
-  "interface": "mavlink",
+  "interface": "mavlink",  // or "msp" for Betaflight/iNav
   "port": "/dev/ttyAMA0",
   "baudrate": 115200
 }
 ```
-3. Implement `_send_corrections()` method for your protocol
 
-### Option B: PWM Output
+3. Configure flight controller UART for MAVLink or MSP at 115200 baud
 
-1. Connect Pi GPIO pins to FC receiver inputs
-2. Update config:
-```json
-"output": {
-  "interface": "pwm"
-}
-```
-3. Install pigpio: `sudo apt-get install pigpio python3-pigpio`
-4. Implement PWM generation in `_send_corrections()`
+**Important**: Ensure voltage levels match (3.3V for most FCs). Do NOT connect to 5V UARTs without level shifter!
 
 ## Initial Flight Test
 
 ### Safety Checklist
 
-- [ ] Sensor securely mounted and facing down
+- [ ] Camera securely mounted and facing down
 - [ ] All connections secure and insulated
 - [ ] Pi powered from stable BEC (not USB)
+- [ ] Serial connection to FC verified (TX/RX/GND)
 - [ ] Manual control mode configured as backup
 - [ ] Test area is safe and clear
 - [ ] Adequate lighting for optical tracking
@@ -201,51 +246,71 @@ sudo journalctl -u betafly-stabilizer.service -f
 
 1. **Ground Test**
    ```bash
-   ./betafly_stabilizer.py --mode velocity_damping --log
+   ./betafly_stabilizer_advanced.py --mode velocity_damping --log
    ```
    - Move drone manually on ground
-   - Verify sensor responds correctly
+   - Verify camera tracking responds correctly
+   - Check web interface shows position changes
    - Check logs show reasonable values
 
 2. **Hover Test**
    - Start in manual mode
    - Take off and hover at ~0.5m height
-   - Enable velocity damping
+   - Enable velocity damping via web interface or RC switch
    - Verify drift reduction
 
 3. **Position Hold Test**
    - Hover stable in velocity damping mode
-   - Switch to position hold
+   - Switch to position hold via web interface or RC switch
    - Release controls
    - Verify drone maintains position
 
 ## Troubleshooting
 
-### SPI Not Working
+### Camera Not Detected
 
+**CSI Camera:**
 ```bash
-# Check SPI is enabled
-ls /dev/spi*
-# Should show: /dev/spidev0.0  /dev/spidev0.1
-
-# Check kernel module loaded
-lsmod | grep spi
-# Should show: spi_bcm2835
-
-# If not enabled:
+# Check camera is enabled
 sudo raspi-config
-# Interface Options -> SPI -> Enable -> Reboot
+# Interface Options -> Camera -> Enable
+
+# Test camera
+raspistill -o test.jpg
+# Or: libcamera-still -o test.jpg
+
+# Check ribbon cable connection
+# Ensure contacts face away from Ethernet port
 ```
 
-### Sensor Not Responding
+**USB Camera:**
+```bash
+# List video devices
+ls /dev/video*
+
+# Test with OpenCV
+python3 -c "import cv2; print(cv2.VideoCapture(0).isOpened())"
+
+# Check USB connection
+lsusb
+```
+
+### Serial Port Not Working
 
 ```bash
-# Test with spidev directly
-python3 -c "import spidev; s = spidev.SpiDev(); s.open(0,0); print('OK')"
+# Check serial port is enabled
+sudo raspi-config
+# Interface Options -> Serial Port
+# - Login shell over serial: NO
+# - Serial port hardware: YES
 
-# Check wiring with multimeter
-# VCC should be 3.3V
-# GND should be 0V
+# Test serial port
+echo "test" > /dev/ttyAMA0
+
+# Check wiring
+# Pi GPIO 14 (TXD) -> FC RX
+# Pi GPIO 15 (RXD) -> FC TX
+# Pi GND -> FC GND
 ```
 
 ### Poor Tracking
@@ -259,8 +324,8 @@ python3 -c "import spidev; s = spidev.SpiDev(); s.open(0,0); print('OK')"
 ### Permission Errors
 
 ```bash
-# Add user to SPI group
-sudo usermod -a -G spi,gpio pi
+# Add user to video group (for camera access)
+sudo usermod -a -G video,gpio pi
 
 # Make scripts executable
 chmod +x *.py *.sh

@@ -15,7 +15,7 @@ import logging
 from typing import Optional
 import json
 
-from optical_flow_sensor import PMW3901, OpticalFlowTracker
+from camera_optical_flow import CameraOpticalFlow, CameraFlowTracker, auto_detect_camera
 from position_stabilizer import (
     StabilizationController, 
     PIDGains
@@ -44,16 +44,25 @@ class BetaflyStabilizer:
         # Load configuration
         self.config = self._load_config(config_file)
         
-        # Initialize optical flow sensor
-        logger.info("Initializing optical flow sensor...")
-        self.sensor = PMW3901(
-            spi_bus=self.config['sensor']['spi_bus'],
-            spi_device=self.config['sensor']['spi_device'],
-            rotation=self.config['sensor']['rotation']
-        )
+        # Initialize camera
+        logger.info("Initializing camera...")
+        camera_id = self.config.get('camera', {}).get('device', 0)
+        if camera_id == 'auto':
+            camera_id = auto_detect_camera()
+            if camera_id is None:
+                raise RuntimeError("No camera detected")
         
-        # Initialize optical flow tracker
-        self.tracker = OpticalFlowTracker(
+        self.sensor = CameraOpticalFlow(
+            camera_id=camera_id,
+            width=self.config.get('camera', {}).get('width', 640),
+            height=self.config.get('camera', {}).get('height', 480),
+            fps=self.config.get('camera', {}).get('fps', 30),
+            method=self.config.get('camera', {}).get('method', 'farneback')
+        )
+        self.sensor.start()
+        
+        # Initialize camera flow tracker
+        self.tracker = CameraFlowTracker(
             sensor=self.sensor,
             scale_factor=self.config['tracker']['scale_factor'],
             height_m=self.config['tracker']['initial_height']
@@ -93,10 +102,12 @@ class BetaflyStabilizer:
     def _load_config(self, config_file: Optional[str]) -> dict:
         """Load configuration from file or use defaults"""
         default_config = {
-            'sensor': {
-                'spi_bus': 0,
-                'spi_device': 0,
-                'rotation': 0
+            'camera': {
+                'device': 0,
+                'width': 640,
+                'height': 480,
+                'fps': 30,
+                'method': 'farneback'
             },
             'tracker': {
                 'scale_factor': 0.001,
@@ -164,8 +175,9 @@ class BetaflyStabilizer:
         logger.info("Stopping Betafly stabilization system")
         self.running = False
         
-        # Shutdown sensor
-        self.sensor.shutdown()
+        # Stop sensor
+        if hasattr(self.sensor, 'stop'):
+            self.sensor.stop()
         
         # Close log file
         if self.log_file:

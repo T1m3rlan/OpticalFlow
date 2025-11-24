@@ -1,18 +1,18 @@
-# Betafly Optical Position Stabilization
+# Betafly Camera-Based Position Stabilization
 
-A complete optical flow-based position stabilization system for the Betafly drone, optimized for Raspberry Pi Zero.
+A complete camera-based position stabilization system for the Betafly drone, optimized for Raspberry Pi Zero. Uses computer vision optical flow from Raspberry Pi cameras or analog cameras for GPS-free position hold.
 
-## ✨ New Features
+## ✨ Features
 
 - **🌐 Web Interface**: Beautiful real-time dashboard for monitoring and configuration (port 8080)
-- **📷 Multiple Camera Support**: PMW3901, USB cameras, CSI cameras, and analog FPV cameras
+- **📷 Multiple Camera Support**: Raspberry Pi Camera Module (IMX219, OV5647), USB cameras, and analog FPV cameras
 - **🎮 Manual Stick Inputs**: RC receiver integration with SBUS/PWM support and smooth blending
 - **🔧 Live Configuration**: Edit PID gains and settings through web GUI
 - **📊 Real-time Visualization**: Live position tracking and control output graphs
 
 ## Core Features
 
-- **Optical Flow Sensing**: Multiple sensor options for precise motion tracking
+- **Camera-Based Optical Flow**: Computer vision motion tracking using cameras
 - **Position Hold**: Maintains GPS-free position hold using visual odometry
 - **Velocity Damping**: Reduces drift and oscillations during flight
 - **PID Control**: Tunable PID controllers for X and Y axis stabilization
@@ -24,44 +24,197 @@ A complete optical flow-based position stabilization system for the Betafly dron
 
 ### Required Components
 - **Raspberry Pi Zero W** (or Zero 2 W for better performance)
-- **Optical Flow Sensor** (choose one):
-  - PMW3901 Optical Flow Sensor (SPI) - Pimoroni or similar
-  - **Caddx Infra 256 (I2C)** - Recommended for production ⭐
-  - USB/CSI/Analog Camera (for computer vision approach)
+- **Camera** (choose one):
+  - **Raspberry Pi Camera Module v2** (IMX219) - Recommended ⭐
+  - **Raspberry Pi Camera Module v1** (OV5647)
+  - USB webcam
+  - Analog FPV camera with USB capture card
 - **Flight Controller** (Betaflight, iNav, or ArduPilot compatible)
 - **Power Supply** (5V for Pi, shared with drone battery via BEC)
 
-### Wiring Diagrams
+### Camera Wiring Diagrams
 
-#### Option 1: PMW3901 (SPI)
+#### Option 1: Raspberry Pi Camera Module v2 (IMX219) ⭐ Recommended
+
+The Raspberry Pi Camera Module v2 uses the CSI (Camera Serial Interface) connector on the Raspberry Pi Zero.
+
 ```
-PMW3901 Sensor -> Raspberry Pi Zero
------------------------------------------
-VCC (3.3V)     -> Pin 1 (3.3V)
-GND            -> Pin 6 (GND)
-MOSI           -> Pin 19 (GPIO 10 / MOSI)
-MISO           -> Pin 21 (GPIO 9 / MISO)
-SCLK           -> Pin 23 (GPIO 11 / SCLK)
-CS             -> Pin 24 (GPIO 8 / CE0)
+Raspberry Pi Camera Module v2 (IMX219) -> Raspberry Pi Zero
+------------------------------------------------------------
+CSI Connector (15-pin ribbon cable)     -> CSI Port on Pi Zero
 ```
 
-#### Option 2: Caddx Infra 256 (I2C) ⭐ Recommended
+**Physical Connection:**
+1. Locate the CSI connector on Raspberry Pi Zero (between HDMI and audio jack)
+2. Lift the black plastic tab on the CSI connector
+3. Insert the camera ribbon cable with the contacts facing away from the Ethernet port
+4. Push the black tab down to lock the cable in place
+
+**Pinout (for reference):**
 ```
-Caddx Infra 256 -> Raspberry Pi Zero
------------------------------------------
-VCC (3.3V)      -> Pin 1 (3.3V)
-GND             -> Pin 6 (GND)
-SDA             -> Pin 3 (GPIO 2 / I2C SDA)
-SCL             -> Pin 5 (GPIO 3 / I2C SCL)
+Camera Module CSI Connector (15-pin):
+Pin 1  (GND)      -> Ground
+Pin 2  (CAM_IO1)  -> Camera I/O 1
+Pin 3  (CAM_IO0)  -> Camera I/O 0
+Pin 4  (GND)      -> Ground
+Pin 5  (CAM_CLK)  -> Camera Clock
+Pin 6  (GND)      -> Ground
+Pin 7  (CAM_D1)   -> Camera Data 1
+Pin 8  (CAM_D0)   -> Camera Data 0
+Pin 9  (GND)      -> Ground
+Pin 10 (CAM_D3)   -> Camera Data 3
+Pin 11 (CAM_D2)   -> Camera Data 2
+Pin 12 (GND)      -> Ground
+Pin 13 (CAM_D5)   -> Camera Data 5
+Pin 14 (CAM_D4)   -> Camera Data 4
+Pin 15 (GND)      -> Ground
 ```
 
-**Benefits of Caddx Infra 256:**
-- ✅ Simpler wiring (4 wires vs 6)
-- ✅ Infrared technology (better in varied lighting)
-- ✅ Lower power consumption
-- ✅ I2C interface (easier debugging)
+**Note**: The ribbon cable handles all connections automatically. No manual wiring needed!
 
-**Important**: Ensure the sensor is mounted facing downward with adequate lighting for optical tracking.
+#### Option 2: Raspberry Pi Camera Module v1 (OV5647)
+
+The original Raspberry Pi Camera Module uses the same CSI connector:
+
+```
+Raspberry Pi Camera Module v1 (OV5647) -> Raspberry Pi Zero
+-------------------------------------------------------------
+CSI Connector (15-pin ribbon cable)      -> CSI Port on Pi Zero
+```
+
+**Connection Steps:**
+1. Same as Camera Module v2 - use CSI connector
+2. Ensure ribbon cable is inserted correctly (contacts facing away from Ethernet port)
+3. Lock the connector tab
+
+#### Option 3: Analog Camera with USB Capture Card
+
+For analog FPV cameras (NTSC/PAL):
+
+```
+Analog FPV Camera -> USB Video Capture Card -> Raspberry Pi Zero USB Port
+```
+
+**Wiring:**
+```
+Analog Camera:
+Video Out (Yellow RCA) -> USB Capture Card Video In
+GND                    -> USB Capture Card GND
+Power (5V/12V)         -> Camera power supply (separate)
+```
+
+**USB Capture Card Connection:**
+- Connect USB capture card to Raspberry Pi Zero USB port (use USB OTG adapter if needed)
+- Camera appears as `/dev/video0` or `/dev/video1`
+
+**Recommended USB Capture Cards:**
+- EasyCap DC60
+- Elgato Cam Link 4K (high quality)
+- Generic USB video capture dongles
+
+#### Option 4: USB Webcam
+
+Standard USB webcams connect directly:
+
+```
+USB Webcam -> Raspberry Pi Zero USB Port
+```
+
+**Connection:**
+- Plug USB webcam into USB port
+- Use USB OTG adapter if needed for Pi Zero
+- Camera appears as `/dev/video0`
+
+### Raspberry Pi Zero to Flight Controller Wiring
+
+Connect Raspberry Pi Zero to your flight controller using the UART serial interface (TX/RX pads).
+
+#### Wiring Diagram
+
+```
+Raspberry Pi Zero          Flight Controller
+------------------         -----------------
+GPIO 14 (TXD)      ------>  RX Pad (UART RX)
+GPIO 15 (RXD)      <------  TX Pad (UART TX)
+GND                -------  GND (Ground)
+```
+
+**Physical Pin Locations on Raspberry Pi Zero:**
+
+```
+Raspberry Pi Zero GPIO Header (40-pin):
+Pin 8  (GPIO 14 / TXD)  -> Flight Controller RX
+Pin 10 (GPIO 15 / RXD)  -> Flight Controller TX
+Pin 6  (GND)            -> Flight Controller GND
+```
+
+**Visual Pinout:**
+```
+    3.3V  [1]  [2]  5V
+   GPIO2  [3]  [4]  5V
+   GPIO3  [5]  [6]  GND  <-- Connect FC GND here
+   GPIO4  [7]  [8]  GPIO14 (TXD) <-- Connect to FC RX
+     GND  [9]  [10] GPIO15 (RXD) <-- Connect to FC TX
+  GPIO17 [11] [12] GPIO18
+  GPIO27 [13] [14] GND
+  GPIO22 [15] [16] GPIO23
+    3.3V [17] [18] GPIO24
+  GPIO10 [19] [20] GND
+   GPIO9 [21] [22] GPIO25
+  GPIO11 [23] [24] GPIO8
+     GND [25] [26] GPIO7
+   GPIO0 [27] [28] GPIO1
+   GPIO5 [29] [30] GND
+   GPIO6 [31] [32] GPIO12
+  GPIO13 [33] [34] GND
+  GPIO19 [35] [36] GPIO16
+  GPIO26 [37] [38] GPIO20
+     GND [39] [40] GPIO21
+```
+
+**Flight Controller Connection:**
+
+Most flight controllers have labeled UART pads. Common locations:
+
+1. **Betaflight/iNav FCs**: Look for UART pads labeled:
+   - `TX` or `UART TX` - Connect to Pi GPIO 15 (RXD)
+   - `RX` or `UART RX` - Connect to Pi GPIO 14 (TXD)
+   - `GND` - Connect to Pi GND
+
+2. **ArduPilot FCs**: Usually have multiple UARTs:
+   - Use any available UART (e.g., TELEM1, TELEM2)
+   - Connect TX/RX/GND pads
+
+**Important Notes:**
+- ⚠️ **Voltage Levels**: Most flight controllers use 3.3V logic levels, which matches Raspberry Pi Zero GPIO (3.3V). Do NOT connect to 5V UARTs without level shifter!
+- ⚠️ **Cross Connection**: Pi TX connects to FC RX, Pi RX connects to FC TX (crossed)
+- ⚠️ **Ground Connection**: Always connect GND for proper signal reference
+- ⚠️ **Baud Rate**: Configure both Pi and FC to same baud rate (typically 115200)
+
+**Serial Port Configuration:**
+
+Enable serial port on Raspberry Pi:
+
+```bash
+sudo raspi-config
+# Navigate to: Interface Options -> Serial Port
+# - Login shell over serial: NO
+# - Serial port hardware: YES
+```
+
+The serial port will be available at `/dev/ttyAMA0` (GPIO 14/15).
+
+**Testing Connection:**
+
+```bash
+# On Raspberry Pi, test serial output
+echo "test" > /dev/ttyAMA0
+
+# Monitor serial input
+cat /dev/ttyAMA0
+```
+
+**Important**: Ensure camera is mounted facing downward with clear view of ground surface for optical tracking.
 
 ## Software Installation
 
@@ -75,9 +228,15 @@ sudo apt-get upgrade -y
 # Install Python 3 and pip (if not already installed)
 sudo apt-get install python3 python3-pip -y
 
-# Enable SPI interface
+# Enable Camera Interface (for CSI cameras)
 sudo raspi-config
-# Navigate to: Interface Options -> SPI -> Enable
+# Navigate to: Interface Options -> Camera -> Enable
+
+# Enable Serial Port (for FC communication)
+sudo raspi-config
+# Navigate to: Interface Options -> Serial Port
+# - Login shell over serial: NO
+# - Serial port hardware: YES
 ```
 
 ### 2. Clone Repository
@@ -94,15 +253,31 @@ cd betafly-stabilization
 # Install Python packages
 pip3 install -r requirements.txt
 
+# Install additional camera dependencies
+sudo apt-get install -y python3-opencv v4l-utils
+
 # Make main script executable
-chmod +x betafly_stabilizer.py
+chmod +x betafly_stabilizer.py betafly_stabilizer_advanced.py
 ```
 
-### 4. Test Sensor Connection
+### 4. Test Camera Connection
 
+**For CSI Camera (Raspberry Pi Camera Module):**
 ```bash
-# Quick sensor test
-python3 -c "from optical_flow_sensor import PMW3901; s = PMW3901(); print('Sensor OK')"
+# Test camera capture
+raspistill -o test.jpg
+
+# Or using libcamera (Raspberry Pi OS Bullseye+)
+libcamera-still -o test.jpg
+```
+
+**For USB Camera:**
+```bash
+# List available video devices
+ls /dev/video*
+
+# Test camera with OpenCV
+python3 -c "import cv2; cap = cv2.VideoCapture(0); print('Camera OK:', cap.isOpened()); cap.release()"
 ```
 
 ## Configuration
@@ -113,8 +288,13 @@ Edit `config.json` to customize the system for your setup:
 
 ```json
 {
-  "sensor": {
-    "rotation": 0,  // Adjust based on sensor mounting orientation
+  "camera": {
+    "type": "csi_camera",  // or "usb_camera", "analog_usb"
+    "device": 0,  // Camera device ID or "auto"
+    "width": 640,
+    "height": 480,
+    "fps": 30,
+    "method": "farneback"  // or "lucas_kanade"
   },
   "tracker": {
     "initial_height": 0.5,  // Expected flight height in meters
@@ -132,6 +312,11 @@ Edit `config.json` to customize the system for your setup:
   },
   "control": {
     "update_rate_hz": 50  // Control loop frequency
+  },
+  "output": {
+    "interface": "mavlink",  // or "msp"
+    "port": "/dev/ttyAMA0",  // Serial port for FC communication
+    "baudrate": 115200
   }
 }
 ```
@@ -177,15 +362,16 @@ The web interface provides:
 ### Using Different Camera Types
 
 ```bash
-# PMW3901 sensor (default)
-./betafly_stabilizer_advanced.py
+# Raspberry Pi Camera Module (CSI) - default
+# Edit config.json: "camera": {"type": "csi_camera"}
+./betafly_stabilizer_advanced.py --config config.json
 
 # USB camera
-# Edit config.json: "sensor": {"type": "usb_camera"}
+# Edit config.json: "camera": {"type": "usb_camera"}
 ./betafly_stabilizer_advanced.py --config config.json
 
 # Analog camera via USB capture card
-# Edit config.json: "sensor": {"type": "analog_usb"}
+# Edit config.json: "camera": {"type": "analog_usb"}
 ./betafly_stabilizer_advanced.py --config config.json
 ```
 
@@ -206,35 +392,56 @@ The web interface provides:
 
 ## Integration with Flight Controller
 
-The system outputs pitch and roll correction angles that need to be sent to your flight controller.
+The system outputs pitch and roll correction angles that need to be sent to your flight controller via serial connection.
 
-### Option 1: MAVLink (Recommended)
+### Serial Connection Setup
+
+**Hardware Wiring:**
+- Raspberry Pi Zero GPIO 14 (TXD) → Flight Controller RX pad
+- Raspberry Pi Zero GPIO 15 (RXD) → Flight Controller TX pad  
+- Raspberry Pi Zero GND → Flight Controller GND
+
+**Software Configuration:**
+
+### Option 1: MAVLink (Recommended for ArduPilot/PX4)
 
 For ArduPilot or PX4:
-- Connect Pi serial to FC telemetry port
-- Set `"interface": "mavlink"` in config
+- Connect Pi serial to FC telemetry port (UART)
+- Set `"interface": "mavlink"` in config.json
+- Set `"port": "/dev/ttyAMA0"` and `"baudrate": 115200`
 - System sends `SET_POSITION_TARGET_LOCAL_NED` messages
 
-### Option 2: MSP Protocol
+**Flight Controller Setup:**
+- Configure telemetry port for MAVLink at 115200 baud
+- Enable position hold mode support
+
+### Option 2: MSP Protocol (For Betaflight/iNav)
 
 For Betaflight/iNav:
 - Connect Pi serial to FC UART
-- Set `"interface": "msp"` in config
+- Set `"interface": "msp"` in config.json
+- Set `"port": "/dev/ttyAMA0"` and `"baudrate": 115200`
 - Implement MSP message handling in `_send_corrections()`
 
-### Option 3: PWM Override
+**Flight Controller Setup:**
+- Configure UART for MSP at 115200 baud
+- Enable MSP on selected UART port
 
-- Connect Pi GPIO to FC receiver inputs
+### Option 3: PWM Override (Advanced)
+
+- Connect Pi GPIO pins to FC receiver inputs
 - Set `"interface": "pwm"` in config
 - Use pigpio library for PWM generation
+- Requires additional hardware connections
 
 ## Tuning Guide
 
-### Step 1: Verify Optical Flow
+### Step 1: Verify Camera Optical Flow
 
 1. Start system with logging enabled
 2. Manually move drone and observe position tracking
-3. Ensure `surface_quality` (squal) stays above 50
+3. Ensure `surface_quality` stays above 50
+4. Check camera view has adequate texture/features
 
 ### Step 2: Tune Velocity Damping
 
@@ -254,7 +461,8 @@ For Betaflight/iNav:
 - **Too oscillatory?** Decrease Kp, increase Kd
 - **Too slow to respond?** Increase Kp
 - **Steady-state error?** Increase Ki (but keep small!)
-- **Drifting away?** Check sensor mounting and height setting
+- **Drifting away?** Check camera mounting, height setting, and lighting
+- **Poor tracking?** Ensure ground has visible texture, adequate lighting
 
 ## Performance Optimization
 
@@ -303,28 +511,49 @@ plt.show()
 
 ## Troubleshooting
 
-### Sensor Not Detected
+### Camera Not Detected
 
-- Verify SPI is enabled: `lsmod | grep spi`
-- Check wiring connections
-- Test with `spidev` directly
+**CSI Camera:**
+- Verify camera is enabled: `sudo raspi-config` → Interface Options → Camera
+- Check ribbon cable connection (contacts facing away from Ethernet port)
+- Test with: `raspistill -o test.jpg` or `libcamera-still -o test.jpg`
+- Ensure camera is compatible (IMX219 or OV5647)
+
+**USB Camera:**
+- List devices: `ls /dev/video*`
+- Check USB connection and power
+- Test with: `python3 -c "import cv2; print(cv2.VideoCapture(0).isOpened())"`
+- Try different USB port or USB OTG adapter
 
 ### Poor Tracking Quality
 
 - Ensure adequate lighting (avoid direct sunlight)
-- Check sensor is clean and unobstructed
+- Check camera lens is clean and unobstructed
 - Verify height setting matches actual height
 - Ensure surface below has visible texture (not blank/uniform)
+- Try different optical flow method (farneback vs lucas_kanade)
+- Reduce resolution if CPU is overloaded
 
 ### Position Drift
 
-- Verify sensor rotation setting matches physical mounting
-- Check for vibrations (dampen sensor mounting)
+- Check for vibrations (dampen camera mounting)
 - Increase velocity damping factor
 - Ensure height is set correctly (scales optical flow)
+- Verify camera is mounted facing downward
+- Check ground surface has sufficient texture
+
+### Serial Communication Issues
+
+- Verify wiring: Pi TX → FC RX, Pi RX → FC TX, GND → GND
+- Check serial port enabled: `sudo raspi-config` → Serial Port
+- Verify baud rate matches (115200)
+- Test serial port: `echo "test" > /dev/ttyAMA0`
+- Check voltage levels (3.3V, not 5V)
 
 ### Control Loop Running Slow
 
+- Reduce camera resolution (e.g., 320x240)
+- Use lucas_kanade method instead of farneback
 - Reduce update rate in config
 - Disable data logging
 - Close unnecessary processes
@@ -340,10 +569,10 @@ plt.show()
         ┌─────────────┴─────────────┐
         │                           │
 ┌───────▼────────┐         ┌────────▼────────┐
-│ Optical Flow   │         │  Stabilization  │
-│    Tracking    │         │   Controller    │
+│ Camera Optical │         │  Stabilization  │
+│    Flow        │         │   Controller    │
 │                │         │                 │
-│ - PMW3901      │────────▶│ - Position PID  │
+│ - CSI/USB/Analog│────────▶│ - Position PID  │
 │ - Position Est │         │ - Velocity Damp │
 │ - Velocity Est │         │ - Mode Control  │
 └────────────────┘         └─────────┬───────┘
@@ -353,16 +582,20 @@ plt.show()
                             │   Interface     │
                             │                 │
                             │ - MAVLink / MSP │
-                            │ - PWM Output    │
+                            │ - Serial (TX/RX)│
                             └─────────────────┘
 ```
 
 ## API Reference
 
-### OpticalFlowTracker
+### CameraFlowTracker
 
 ```python
-tracker = OpticalFlowTracker(sensor, scale_factor=0.001, height_m=0.5)
+from camera_optical_flow import CameraOpticalFlow, CameraFlowTracker
+
+camera = CameraOpticalFlow(camera_id=0, width=640, height=480)
+camera.start()
+tracker = CameraFlowTracker(camera, scale_factor=0.001, height_m=0.5)
 pos_x, pos_y = tracker.update()  # Get current position
 vel_x, vel_y = tracker.get_velocity()  # Get velocity
 tracker.reset_position()  # Reset to origin
@@ -396,13 +629,12 @@ For detailed information about new features:
 ## Project Files
 
 ### Core System
-- `betafly_stabilizer.py` - Original basic control script
-- `betafly_stabilizer_advanced.py` - **New!** Advanced system with all features
-- `optical_flow_sensor.py` - PMW3901 sensor interface
-- `camera_optical_flow.py` - **New!** Camera-based optical flow (USB/CSI/Analog)
+- `betafly_stabilizer.py` - Basic control script
+- `betafly_stabilizer_advanced.py` - Advanced system with all features
+- `camera_optical_flow.py` - Camera-based optical flow (CSI/USB/Analog)
 - `position_stabilizer.py` - PID control and stabilization algorithms
-- `stick_input.py` - **New!** RC receiver input handling (SBUS/PWM)
-- `web_interface.py` - **New!** Flask web server and API
+- `stick_input.py` - RC receiver input handling (SBUS/PWM)
+- `web_interface.py` - Flask web server and API
 
 ### Web Interface
 - `templates/index.html` - Web dashboard UI
@@ -425,13 +657,14 @@ For detailed information about new features:
 ## Contributing
 
 Contributions welcome! Areas for improvement:
-- Flight controller integration implementations
-- Additional sensor support (VL53L0X for height)
+- Flight controller integration implementations (MAVLink/MSP)
+- Additional camera support
 - Kalman filter for sensor fusion
 - Auto-tuning algorithms
 - Ground effect compensation
 - Additional web interface features
 - Mobile app development
+- Height sensor integration (VL53L0X)
 
 ## License
 
@@ -455,9 +688,10 @@ For issues, questions, or contributions:
 ## Credits
 
 Developed for the Betafly drone project using:
-- PMW3901 optical flow sensor
+- Raspberry Pi Camera Modules (IMX219, OV5647)
 - Raspberry Pi Zero platform
 - PID control theory
+- Computer vision optical flow algorithms
 - Visual odometry principles
 
 ---

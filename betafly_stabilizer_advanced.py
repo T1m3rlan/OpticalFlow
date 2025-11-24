@@ -13,19 +13,10 @@ from typing import Optional
 import json
 from threading import Thread
 
-from optical_flow_sensor import PMW3901, OpticalFlowTracker
-from camera_optical_flow import CameraOpticalFlow, AnalogCameraFlow, auto_detect_camera
+from camera_optical_flow import CameraOpticalFlow, AnalogCameraFlow, CameraFlowTracker, auto_detect_camera
 from position_stabilizer import StabilizationController, PIDGains
 from stick_input import StickInput, StickMixer, ModeSwitch
 from web_interface import app, system_state, state_lock, start_web_server
-
-# Try to import Caddx Infra 256
-try:
-    from caddx_infra256 import CaddxInfra256
-    CADDX_AVAILABLE = True
-except ImportError:
-    CADDX_AVAILABLE = False
-    logger.warning("Caddx Infra 256 support not available")
 
 logging.basicConfig(
     level=logging.INFO,
@@ -51,26 +42,11 @@ class BetaflyStabilizerAdvanced:
         # Load configuration
         self.config = self._load_config(config_file)
         
-        # Initialize sensor based on type
-        camera_type = self.config.get('sensor', {}).get('type', 'pmw3901')
-        logger.info(f"Initializing sensor: {camera_type}")
+        # Initialize camera based on type
+        camera_type = self.config.get('camera', {}).get('type', 'usb_camera')
+        logger.info(f"Initializing camera: {camera_type}")
         
-        if camera_type == 'pmw3901':
-            self.sensor = PMW3901(
-                spi_bus=self.config['sensor']['spi_bus'],
-                spi_device=self.config['sensor']['spi_device'],
-                rotation=self.config['sensor']['rotation']
-            )
-        elif camera_type == 'caddx_infra256':
-            if not CADDX_AVAILABLE:
-                raise RuntimeError("Caddx Infra 256 support not available. Install smbus2: pip install smbus2")
-            
-            self.sensor = CaddxInfra256(
-                bus_number=self.config['sensor'].get('i2c_bus', 1),
-                address=self.config['sensor'].get('i2c_address', 0x29),
-                rotation=self.config['sensor']['rotation']
-            )
-        elif camera_type in ['usb_camera', 'csi_camera', 'opencv_any']:
+        if camera_type in ['usb_camera', 'csi_camera', 'opencv_any']:
             camera_id = self.config.get('camera', {}).get('device', 0)
             if camera_id == 'auto':
                 camera_id = auto_detect_camera()
@@ -96,8 +72,8 @@ class BetaflyStabilizerAdvanced:
         else:
             raise ValueError(f"Unknown camera type: {camera_type}")
         
-        # Initialize optical flow tracker
-        self.tracker = OpticalFlowTracker(
+        # Initialize camera flow tracker
+        self.tracker = CameraFlowTracker(
             sensor=self.sensor,
             scale_factor=self.config['tracker']['scale_factor'],
             height_m=self.config['tracker']['initial_height']
@@ -172,11 +148,14 @@ class BetaflyStabilizerAdvanced:
     def _load_config(self, config_file: Optional[str]) -> dict:
         """Load configuration from file or use defaults"""
         default_config = {
-            'sensor': {
-                'type': 'pmw3901',
-                'spi_bus': 0,
-                'spi_device': 0,
-                'rotation': 0
+            'camera': {
+                'type': 'usb_camera',
+                'device': 0,
+                'width': 640,
+                'height': 480,
+                'fps': 30,
+                'method': 'farneback',
+                'deinterlace': True
             },
             'tracker': {
                 'scale_factor': 0.001,
@@ -192,14 +171,6 @@ class BetaflyStabilizerAdvanced:
             },
             'control': {
                 'update_rate_hz': 50
-            },
-            'camera': {
-                'device': 0,
-                'width': 640,
-                'height': 480,
-                'fps': 30,
-                'method': 'farneback',
-                'deinterlace': True
             },
             'stick_input': {
                 'enabled': False,
@@ -274,9 +245,7 @@ class BetaflyStabilizerAdvanced:
         self.running = False
         
         # Stop sensor
-        if hasattr(self.sensor, 'shutdown'):
-            self.sensor.shutdown()
-        elif hasattr(self.sensor, 'stop'):
+        if hasattr(self.sensor, 'stop'):
             self.sensor.stop()
         
         # Stop stick input

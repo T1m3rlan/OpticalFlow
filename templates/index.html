@@ -166,11 +166,10 @@
                     <div class="form-group">
                         <label>Sensor Type</label>
                         <select id="camera-type-select" onchange="updateCameraType()">
-                            <option value="pmw3901">PMW3901 Optical Flow Sensor (SPI)</option>
-                            <option value="caddx_infra256">Caddx Infra 256 (I2C)</option>
-                            <option value="usb_camera">USB Camera</option>
-                            <option value="csi_camera">Raspberry Pi Camera (CSI)</option>
-                            <option value="analog_usb">Analog Camera via USB</option>
+                            <option value="usb_camera">USB Camera (OpenCV)</option>
+                            <option value="csi_camera">Raspberry Pi Camera Module (CSI) - IMX219/OV5647</option>
+                            <option value="analog_usb">Analog Camera via USB Capture Card</option>
+                            <option value="opencv_any">Any OpenCV Compatible Camera</option>
                         </select>
                     </div>
                     <div class="form-group" id="i2c-address-group" style="display:none;">
